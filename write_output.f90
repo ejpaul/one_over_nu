@@ -57,7 +57,8 @@ subroutine write_output(total_time)
 		vn_Boozer_I = "Boozer_I", &
 		vn_Boozer_G = "Boozer_G", &
 		vn_s_wish = "s_wish", &
-		vn_s_surf = "s_surf"
+		vn_s_surf = "s_surf", &
+		vn_particleFlux = "particleFlux"
 
 	! Arrays with dimension 2
 	character(len=*), parameter :: &
@@ -140,6 +141,7 @@ subroutine write_output(total_time)
 	call cdf_define(ncid, vn_iota, iota, dimname=nsurf_dim)
 	call cdf_define(ncid, vn_Boozer_G, Boozer_G, dimname=nsurf_dim)
 	call cdf_define(ncid, vn_Boozer_I, Boozer_I, dimname=nsurf_dim)
+	call cdf_define(ncid, vn_particleFlux, particleFlux, dimname=nsurf_dim)
 
 	! 2 dimension
 	call cdf_define(ncid,vn_bmnc,bmnc,dimname=nsurf_nmodes_dim)
@@ -193,6 +195,7 @@ subroutine write_output(total_time)
 	call cdf_write(ncid,vn_alphas,alphas)
 	call cdf_write(ncid,vn_boozmn_filename,boozmn_filename)
 	call cdf_write(ncid,vn_s_surf,s_surf)
+	call cdf_write(ncid,vn_particleFlux,particleFlux)
 
 	! 2 dimension
 	call cdf_write(ncid,vn_bmnc,bmnc)
