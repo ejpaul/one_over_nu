@@ -4,6 +4,7 @@ module splines_mod
 	use ezspline
 	use stel_kinds
 	use input_mod, only: ntheta_spline, nzeta_spline
+	use constants_mod
 
 	real(dp), dimension(:), allocatable :: thetas_spline, zetas_spline
 	real(dp), dimension(:,:,:), allocatable :: B_for_spline, dBdtheta_for_spline, dBdzeta_for_spline
@@ -96,8 +97,8 @@ module splines_mod
 			do itheta=1,ntheta_spline
 				do izeta=1,nzeta_spline
 					theta = thetas_spline(itheta)+twopi
-					zeta = zetas_spline(izeta)+twopi/nfp
-					call ezspline_modulo(spline_B(isurf),theta,zeta,ierr)
+					zeta = zetas_spline(izeta)-twopi/nfp
+					call spline_modulo(spline_B(isurf),theta,zeta)
 					call ezspline_interp(spline_B(isurf),theta,zeta,BB,ierr)
 					call ezspline_interp(spline_dBdtheta(isurf),theta,zeta,dBBdtheta,ierr)
 					call ezspline_interp(spline_dBdzeta(isurf),theta,zeta,dBBdzeta,ierr)
@@ -112,5 +113,127 @@ module splines_mod
 		end do
 
 	end subroutine init_spline
+
+! ===================================================
+! Subroutine spline_modulo
+!
+! This subroutine should function as
+! Ezspline_modulo, but allows negative arguments.
+!
+!
+! Inputs:
+! spline	ezspline object (type ezspline2_r8 assumed here)
+!	theta		poloidal angle for evaluation
+! zeta		toroidal angle for evaluation
+!
+! Outputs:
+! theta		poloidal angle shifted to range of periodic
+!					grid
+! zeta		toroidal angle shifted to range of periodic
+!					grid
+! ===================================================
+	subroutine spline_modulo(spline,theta,zeta)
+
+		type(EZspline2_r8), intent(in) :: spline
+		real(dp), intent(inout) :: theta, zeta
+
+		! Check for periodicity
+		if (spline%ibctype1(1)==-1 .and. spline%ibctype1(2)==-1) then
+			do while (theta < spline%x1min)
+				theta = theta + (spline%x1max-spline%x1min)
+			end do
+			do while (theta > spline%x1max)
+				theta = theta - (spline%x1max-spline%x1min)
+			end do
+		end if
+		! Check for periodicity
+		if (spline%ibctype2(1)==-1 .and. spline%ibctype2(2)==-1) then
+			do while (zeta < spline%x2min)
+				zeta = zeta + (spline%x2max-spline%x2min)
+			end do
+			do while (zeta > spline%x2max)
+				zeta = zeta - (spline%x2max-spline%x2min)
+			end do
+		end if
+		! Check if within grid
+		if (theta < spline%x1min .or. theta > spline%x1max) then
+			print *,"Error in spline_modulo! "
+		end if
+		if (zeta < spline%x2min .or. zeta > spline%x2max) then
+			print *,"Error in spline_modulo!"
+		end if
+
+	end subroutine spline_modulo
+
+! ===================================================
+! Function compute_B_spline
+!
+! This function computes the local magnetic field
+! using the EZspline interface.
+!
+! Input:
+! isurf		index in ssurf for calculation.
+! theta		theta for calculation
+! zeta		zeta for calculation.
+!
+! Output:
+! compute_B_spline			interpolated B at specified location.
+!
+! ===================================================
+	function compute_B_spline(isurf,theta,zeta)
+
+		integer, intent(in) :: isurf
+		real(dp) :: theta, zeta
+		real(dp) :: compute_B_spline
+		real(dp) :: zeta_eval, theta_eval
+		integer :: ierr
+
+		zeta_eval = zeta
+		theta_eval = theta
+		call spline_modulo(spline_B(isurf),theta_eval,zeta_eval)
+		call ezspline_interp(spline_B(isurf),theta_eval,zeta_eval,compute_B_spline,ierr)
+		call ezspline_error(ierr)
+
+	end function compute_B_spline
+
+! ===================================================
+! Function compute_geometry_spline
+!
+! This function computes the local B, dBdtheta, and
+! dBdzeta using the EzSpline interface.
+!
+! Input:
+! isurf		index in ssurf for calculation.
+! theta		theta for calculation
+! zeta		zeta for calculation.
+!
+! Output:
+! compute_geometry_spline		array of length geometry_length=4
+!														This array can be indexed into
+!														using B_index=1, dBdtheta=2,
+!														dBdzeta=3 (defined in constants_mod).
+!
+! ===================================================
+	function compute_geometry_spline(isurf,theta,zeta)
+
+		integer, intent(in) :: isurf
+		real(dp), intent(in) :: theta, zeta
+		real(dp), dimension(geometry_length) :: compute_geometry_spline
+		real(dp) :: zeta_eval, theta_eval
+		integer :: ierr
+
+		zeta_eval = zeta
+		theta_eval = theta
+		call spline_modulo(spline_B(isurf),theta_eval,zeta_eval)
+		call ezspline_interp(spline_B(isurf),theta_eval,zeta_eval,compute_geometry_spline(B_index),ierr)
+		call ezspline_error(ierr)
+		call ezspline_interp(spline_dBdtheta(isurf),theta_eval,zeta_eval,&
+				compute_geometry_spline(dBdtheta_index),ierr)
+		call ezspline_error(ierr)
+		call ezspline_interp(spline_dBdzeta(isurf),theta_eval,zeta_eval,&
+				compute_geometry_spline(dBdzeta_index),ierr)
+		call ezspline_error(ierr)
+
+	end function compute_geometry_spline
 
 end module splines_mod

@@ -22,8 +22,9 @@ subroutine find_bounce_point(isurf,zeta_left,zeta_right,alpha0,lambda,zeta_bounc
 
 	use stel_kinds
 	use constants_mod
-	use geometry_mod, only: iota, compute_geometry, compute_B
+	use geometry_mod, only: iota
 	use input_mod, only: niter_root, root_search_tolerance
+	use splines_mod, only: compute_B_spline, compute_geometry_spline
 
 	implicit none
 
@@ -39,8 +40,8 @@ subroutine find_bounce_point(isurf,zeta_left,zeta_right,alpha0,lambda,zeta_bounc
 	zeta_search = 0
 	f_search = 0
 
-	modB_left = compute_B(isurf,alpha0+iota(isurf)*zeta_left,zeta_left)
-	modB_right = compute_B(isurf,alpha0+iota(isurf)*zeta_right,zeta_right)
+	modB_left = compute_B_spline(isurf,alpha0+iota(isurf)*zeta_left,zeta_left)
+	modB_right = compute_B_spline(isurf,alpha0+iota(isurf)*zeta_right,zeta_right)
 	fl = 1-lambda*modB_left
 	fh = 1-lambda*modB_right
 
@@ -71,7 +72,7 @@ subroutine find_bounce_point(isurf,zeta_left,zeta_right,alpha0,lambda,zeta_bounc
 	dxold = abs(zeta_left-zeta_right)
 	dx = dxold
 	! Evaluate function and derivative at initial guess
-	geometry = compute_geometry(isurf,alpha0+iota(isurf)*rts,rts)
+	geometry = compute_geometry_spline(isurf,alpha0+iota(isurf)*rts,rts)
 	modB = geometry(B_index)
 	f = 1-lambda*modB
 
@@ -116,7 +117,7 @@ subroutine find_bounce_point(isurf,zeta_left,zeta_right,alpha0,lambda,zeta_bounc
         exit
       end if
       ! The one new function evaluation per iteration
-			geometry = compute_geometry(isurf,alpha0+iota(isurf)*rts,rts)
+			geometry = compute_geometry_spline(isurf,alpha0+iota(isurf)*rts,rts)
       modB =  geometry(B_index)
 			f = 1-lambda*modB
 

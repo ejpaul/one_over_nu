@@ -4,8 +4,8 @@ module flintegrate_mod
 	use stel_kinds
 	use omp_lib
 	use ezspline
-	use splines_mod, only: spline_B, spline_dBdtheta, spline_dBdzeta
-	use geometry_mod, only: iota, compute_B, nfp, Boozer_I, Boozer_G
+	use splines_mod, only: compute_geometry_spline, compute_B_spline
+	use geometry_mod, only: iota, nfp, Boozer_I, Boozer_G
 	use constants_mod, only: integrand_length, dKdalpha_index, H_index, I_index, J_index
 
 	implicit none
@@ -60,13 +60,13 @@ module flintegrate_mod
 			zeta = 0
 			zeta_left = -Delta_zeta
 			theta_left = alpha0 + iota(isurf)*zeta_left
-			modB_left = compute_B(isurf,theta_left,zeta_left)
+			modB_left = compute_B_spline(isurf,theta_left,zeta_left)
 
 			k_well = 0
 			do while (zeta .le. twopi/nfp)
 
 				theta = alpha0 + iota(isurf)*zeta
-				modB = compute_B(isurf,theta,zeta)
+				modB = compute_B_spline(isurf,theta,zeta)
 
 				if ((1-this_lambda*modB) .ge. 0) then
 					leftmost_allowed_zeta = zeta
@@ -87,7 +87,8 @@ module flintegrate_mod
 						zeta = zeta + Delta_zeta
 						! Check whether this point is forbidden
 						theta = alpha0 + iota(isurf)* zeta
-						modB = compute_B(isurf,theta,zeta)
+						modB = compute_B_spline(isurf,theta,zeta)
+
 						if ((1 - this_lambda*modB) < 0) then
 							failed = .false.
 							exit
@@ -166,24 +167,22 @@ module flintegrate_mod
  ! ===================================================
 	subroutine bounce_integrand(isurf,alpha0,ilambda,zeta,result)
 
+		use constants_mod
+
 		integer, intent(in) :: isurf
 		real(dp), intent(in) :: alpha0, ilambda, zeta
 		real(dp), dimension(integrand_length) :: result
-
+		real(dp), dimension(geometry_length) :: geometry
 		real(dp) :: BB, dBBdtheta, dBBdzeta, theta, radicand, zeta_eval
 		integer :: ierr
 
 		theta = alpha0 + iota(isurf)*zeta
 		zeta_eval = zeta
 
-		call ezspline_modulo(spline_B(isurf),theta,zeta_eval,ierr)
-		call ezspline_error(ierr)
-		call ezspline_interp(spline_B(isurf),theta,zeta_eval,BB,ierr)
-		call ezspline_error(ierr)
-		call ezspline_interp(spline_dBdtheta(isurf),theta,zeta_eval,dBBdtheta,ierr)
-		call ezspline_error(ierr)
-		call ezspline_interp(spline_dBdzeta(isurf),theta,zeta_eval,dBBdzeta,ierr)
-		call ezspline_error(ierr)
+		geometry = compute_geometry_spline(isurf,theta,zeta_eval)
+		BB = geometry(B_index)
+		dBBdtheta = geometry(dBdtheta_index)
+		dBBdzeta = geometry(dBdzeta_index)
 
 		radicand = max(1-ilambda*BB,0.0)
 
