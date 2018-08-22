@@ -4,11 +4,13 @@ module constants_mod
 
 	! Fixed lengths and indices
 	integer, parameter :: string_length = 100
-	integer, parameter :: integrand_length = 4
+	integer, parameter :: integrand_length = 6
 	integer, parameter :: dKdalpha_index = 1
 	integer, parameter :: H_index = 2
 	integer, parameter :: I_index = 3
 	integer, parameter :: J_index = 4
+	integer, parameter :: d2Kdalpha2_index = 5
+	integer, parameter :: dIdalpha_index = 6
 	integer, parameter :: s_wish_length = 100
 
 	! Fixed lengths and indices

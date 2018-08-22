@@ -8,8 +8,10 @@ module splines_mod
 
 	real(dp), dimension(:), allocatable :: thetas_spline, zetas_spline
 	real(dp), dimension(:,:,:), allocatable :: B_for_spline, dBdtheta_for_spline, dBdzeta_for_spline
+	real(dp), dimension(:,:,:), allocatable :: d2Bdtheta2_for_spline
 	real(dp) :: dtheta_spline, dzeta_spline
 	type(EZspline2_r8), dimension(:), allocatable :: spline_B, spline_dBdtheta, spline_dBdzeta
+	type(EZspline2_r8), dimension(:), allocatable :: spline_d2Bdtheta2
 
 	contains
 
@@ -23,8 +25,8 @@ module splines_mod
 	! ===================================================
 	subroutine init_spline
 
-		use geometry_mod, only: compute_geometry, nfp
-		use input_mod, only: nsurf
+		use geometry_mod, only: compute_geometry, nfp, compute_d2Bdtheta2
+		use input_mod, only: nsurf, output_P_tensor
 		use constants_mod
 		use stel_constants
 
@@ -39,6 +41,9 @@ module splines_mod
 		allocate(dBdzeta_for_spline(nsurf,ntheta_spline,nzeta_spline))
 		allocate(thetas_spline(ntheta_spline))
 		allocate(zetas_spline(nzeta_spline))
+		if (output_P_tensor) then
+			allocate(d2Bdtheta2_for_spline(nsurf,ntheta_spline,nzeta_spline))
+		end if
 
 		! Construct grid for splines - must include periodic end points
 		do itheta=1,ntheta_spline
@@ -58,6 +63,10 @@ module splines_mod
 					B_for_spline(isurf,itheta,izeta) = geometry(B_index)
 					dBdtheta_for_spline(isurf,itheta,izeta) = geometry(dBdtheta_index)
 					dBdzeta_for_spline(isurf,itheta,izeta) = geometry(dBdzeta_index)
+					if (output_P_tensor) then
+						d2Bdtheta2_for_spline(isurf,itheta,izeta) = &
+							compute_d2Bdtheta2(isurf,thetas_spline(itheta),zetas_spline(izeta))
+					end if
 				end do
 			end do
 		end do
@@ -65,6 +74,7 @@ module splines_mod
 		allocate(spline_B(nsurf))
 		allocate(spline_dBdtheta(nsurf))
 		allocate(spline_dBdzeta(nsurf))
+		allocate(spline_d2Bdtheta2(nsurf))
 		do isurf=1,nsurf
 			call ezspline_init(spline_B(isurf),ntheta_spline,nzeta_spline,(/-1,-1/),(/-1,-1/),ierr)
 			call ezspline_error(ierr)
@@ -90,6 +100,13 @@ module splines_mod
 			call ezspline_setup(spline_dBdzeta(isurf),dBdzeta_for_spline(isurf,:,:),ierr,.true.)
 			call ezspline_error(ierr)
 
+			call ezspline_init(spline_d2Bdtheta2(isurf),ntheta_spline,nzeta_spline,(/-1,-1/),(/-1,-1/),ierr)
+			call ezspline_error(ierr)
+			spline_d2Bdtheta2(isurf)%x1 = thetas_spline
+			spline_d2Bdtheta2(isurf)%x2 = zetas_spline
+
+			call ezspline_setup(spline_d2Bdtheta2(isurf),d2Bdtheta2_for_spline(isurf,:,:),ierr,.true.)
+			call ezspline_error(ierr)
 		end do
 
 		! Testing splines
@@ -235,5 +252,22 @@ module splines_mod
 		call ezspline_error(ierr)
 
 	end function compute_geometry_spline
+
+	real(dp) function compute_d2Bdtheta2_spline(isurf,theta,zeta)
+
+		integer, intent(in) :: isurf
+		real(dp), intent(in) :: theta,zeta
+		real(dp) :: theta_eval, zeta_eval
+		integer :: ierr
+
+		zeta_eval = zeta
+		theta_eval = theta
+		call spline_modulo(spline_B(isurf),theta_eval,zeta_eval)
+
+		call ezspline_interp(spline_d2Bdtheta2(isurf),theta_eval,zeta_eval,compute_d2Bdtheta2_spline,ierr)
+		call ezspline_error(ierr)
+
+
+	end function compute_d2Bdtheta2_spline
 
 end module splines_mod

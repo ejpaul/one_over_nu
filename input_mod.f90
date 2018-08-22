@@ -30,8 +30,11 @@ module input_mod
 	logical :: verbose = .true.
 
 	! Option for computing particle flux for given profiles
-	integer :: output_particle_flux = 0
-	integer :: nspecies
+	logical :: output_particle_flux = .false.
+	! collision_species_option = 1 -> electron-ion collisions. q_e(2) used for charge of ion
+	! collision_species_option = 2 -> self collisions. q_e(2) not used.
+	integer :: collision_species_option = 1
+	logical :: output_p_tensor = .false.
 	! Profiles of length s_wish_length
 	! T_ev - Temperature (eletron volts)
 	! n_m3 - density (m^{-3})
@@ -41,9 +44,9 @@ module input_mod
 	! m_kg - mass in kg
 	! q_e - charge in elementary charge units (1) = primary (2) = secondary
 	real(dp) :: m_kg
-	real(dp), dimension(2) :: q_e
+	integer, dimension(2) :: q_e
 
-	namelist / one_over_nu_nml / nlambda, nalpha, nintegral, Delta_zeta, max_search_in_zeta, ntheta, nzeta, boozmn_filename, s_wish, nsurf, root_search_tolerance, Niter_root, nwell, niter_newton, tol_newton, verbose, ntheta_spline, nzeta_spline, output_particle_flux, nspecies, T_ev, dTdpsi, n_m3, dlnndpsi, dlnTdpsi, m_kg, q_e
+	namelist / one_over_nu_nml / nlambda, nalpha, nintegral, Delta_zeta, max_search_in_zeta, ntheta, nzeta, boozmn_filename, s_wish, nsurf, root_search_tolerance, Niter_root, nwell, niter_newton, tol_newton, verbose, ntheta_spline, nzeta_spline, output_particle_flux, T_ev, dTdpsi, n_m3, dlnndpsi, dlnTdpsi, m_kg, q_e, collision_species_option, output_p_tensor
 
 	character(len=200) :: inputFilename
 
@@ -127,8 +130,8 @@ module input_mod
 			 else
 				 write(*,fmt = "(a,E15.7)", advance = "yes") "s_wish = ", s_wish(1)
 			 end if
-			 print "(a,i1)","outut_particle_flux = ",output_particle_flux
-			 if (output_particle_flux>0) then
+			 print "(a,l)","outut_particle_flux = ",output_particle_flux
+			 if (output_particle_flux) then
 					! Write T_ev
 					if (nsurf > 1) then
 						write(*,fmt = "(a,E15.7)", advance = "no") "T_ev = ", T_ev(1)
@@ -169,10 +172,17 @@ module input_mod
 					else
 						write(*,fmt = "(a,E15.7)", advance = "yes") "dlnndpsi = ", dlnndpsi(1)
 					end if
+					print "(a,i1)","collision_species_option = ", collision_species_option
 					print "(a,E15.7)","m_kg = ", m_kg
-					print "(a,E15.7,E15.7)","q_e = ", q_e(1), q_e(2)
+					if (collision_species_option==1) then
+						print "(a,i1,i1)","q_e = ", q_e(1)
+					else
+						print "(a,i1,i1)","q_e = ", q_e(1),q_e(2)
+					end if
 			 end if
+			 print "(a,l)","output_p_tensor = ", output_p_tensor
 		end if
+
 
 	end subroutine read_input
 
@@ -253,8 +263,19 @@ module input_mod
 			stop "Error! nzeta_spline must be >=2."
 		end if
 
-		if (output_particle_flux < 0 .or. output_particle_flux > 1) then
-			stop "Error! output_particle_flux must be 0 or 1."
+		if (collision_species_option > 2 .or. collision_species_option < 1) then
+			stop "Erro! collision_species_option must be 0 or 1."
+		end if
+
+		if (output_particle_flux .and. collision_species_option==1) then
+			if (verbose) then
+				print *,"Electron-ion collision option chosen. q_e(2) will be used for secondary charge."
+			end if
+		end if
+		if (output_particle_flux .and. collision_species_option==2) then
+			if (verbose) then
+				print *,"Self collision option chosen. q_e(2) will be ignored."
+			end if
 		end if
 
 	end subroutine validate_input

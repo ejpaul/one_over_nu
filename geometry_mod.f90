@@ -51,12 +51,22 @@ module geometry_mod
 	end function
 
 	real(dp) function compute_B(isurf,theta,zeta)
+
 		real(dp) :: theta,zeta
 		integer :: isurf
 
 		compute_B = dot_product(bmnc(isurf,:),cos(xm*theta-xn*zeta))
 
 	end function
+
+	real(dp) function compute_d2Bdtheta2(isurf,theta,zeta)
+
+		real(dp) :: theta, zeta
+		integer :: isurf
+
+		compute_d2Bdtheta2 = -dot_product(bmnc(isurf,:)*xm*xm,cos(xm*theta-xn*zeta))
+
+	end function compute_d2Bdtheta2
 
 ! ===================================================
 ! subroutine init_geometry
