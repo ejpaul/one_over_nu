@@ -38,7 +38,9 @@ subroutine write_output(total_time)
 		vn_tol_newton = "tol_newton", &
 		vn_root_search_tolerance = "root_search_tolerance", &
 		vn_Niter_root = "Niter_root", &
-		vn_total_time = "total_time"
+		vn_total_time = "total_time", &
+		vn_output_particle_flux  = "output_particle_flux", &
+		vn_collision_species_option = "collision_species_option"
 
 	! Arrays with dimension 1
 	character(len=*), parameter :: &
@@ -58,7 +60,8 @@ subroutine write_output(total_time)
 		vn_Boozer_G = "Boozer_G", &
 		vn_s_wish = "s_wish", &
 		vn_s_surf = "s_surf", &
-		vn_particleFlux = "particleFlux"
+		vn_particleFlux = "particleFlux", &
+		vn_energy_integral = "energy_integral"
 
 	! Arrays with dimension 2
 	character(len=*), parameter :: &
@@ -67,7 +70,9 @@ subroutine write_output(total_time)
 	! Arrays with dimension 3
 	character(len=*), parameter :: &
 		vn_B = "B", &
-		vn_nclass = "nclass"
+		vn_nclass = "nclass", &
+		vn_P_tensor_bb = "P_tensor_bb", &
+		vn_P_tensor_I = "P_tensor_I"
 
 	! Arrays with dimension 4 (summed over nwell dimension)
 	character(len=*), parameter :: &
@@ -78,6 +83,7 @@ subroutine write_output(total_time)
 		vn_K_bounce_integral = "K_bounce_integral", &
 		vn_H_bounce_integral = "H_bounce_integral", &
 		vn_nemov_metric_before_integral = "nemov_metric_before_integral"
+
 
 	! Arrays with dimension 1
 	character(len=*), parameter, dimension(1) :: &
@@ -96,7 +102,9 @@ subroutine write_output(total_time)
 	! Arrays with dimension 3
 	character(len=*), parameter, dimension(3) :: &
 		nsurf_ntheta_nzeta_dim = (/ character(len=50) :: 'nsurf','ntheta','nzeta'/), &
-		nsurf_nlambda_nalpha_dim = (/ character(len=50) :: 'nsurf','nlambda', 'nalpha'/)
+		nsurf_nlambda_nalpha_dim = (/ character(len=50) :: 'nsurf','nlambda', 'nalpha'/), &
+		nsurf_nalpha_nzeta_spline_dim = (/ character(len=50) :: &
+			'nsurf','nalpha','nzeta_spline'/)
 
 	output_filename = "one_over_nu_out" // trim(inputFilename(15:)) // ".nc"
 
@@ -123,6 +131,8 @@ subroutine write_output(total_time)
 	call cdf_define(ncid, vn_root_search_tolerance, root_search_tolerance)
 	call cdf_define(ncid, vn_niter_root, niter_root)
 	call cdf_define(ncid, vn_total_time, total_time)
+	call cdf_define(ncid, vn_output_particle_flux, output_particle_flux)
+	call cdf_define(ncid, vn_collision_species_option, collision_species_option)
 
 	! 1 dimension
 	call cdf_define(ncid,vn_thetas,thetas,dimname=ntheta_dim)
@@ -141,7 +151,12 @@ subroutine write_output(total_time)
 	call cdf_define(ncid, vn_iota, iota, dimname=nsurf_dim)
 	call cdf_define(ncid, vn_Boozer_G, Boozer_G, dimname=nsurf_dim)
 	call cdf_define(ncid, vn_Boozer_I, Boozer_I, dimname=nsurf_dim)
-	call cdf_define(ncid, vn_particleFlux, particleFlux, dimname=nsurf_dim)
+	if (output_particle_flux) then
+		call cdf_define(ncid, vn_particleFlux, particleFlux, dimname=nsurf_dim)
+	end if
+	if (output_p_tensor .or. output_particle_flux) then
+		call cdf_define(ncid, vn_energy_integral,energy_integral, dimname=nsurf_dim)
+	end if
 
 	! 2 dimension
 	call cdf_define(ncid,vn_bmnc,bmnc,dimname=nsurf_nmodes_dim)
@@ -149,6 +164,10 @@ subroutine write_output(total_time)
 	! 3 dimension
 	call cdf_define(ncid,vn_B,B,dimname=nsurf_ntheta_nzeta_dim)
 	call cdf_define(ncid,vn_nclass,nclass,dimname=nsurf_nlambda_nalpha_dim)
+	if (output_P_tensor) then
+		call cdf_define(ncid,vn_P_tensor_bb,P_tensor_bb,dimname=nsurf_nalpha_nzeta_spline_dim)
+		call cdf_define(ncid,vn_P_tensor_I,P_tensor_I,dimname=nsurf_nalpha_nzeta_spline_dim)
+	end if
 
 	! 4 dimension (summed over nwell dimension)
 	call cdf_define(ncid,vn_J_invariant,sum(J_invariant,4),dimname=nsurf_nlambda_nalpha_dim)
@@ -175,6 +194,8 @@ subroutine write_output(total_time)
 	call cdf_write(ncid, vn_root_search_tolerance, root_search_tolerance)
 	call cdf_write(ncid, vn_niter_root, niter_root)
 	call cdf_write(ncid, vn_total_time, total_time)
+	call cdf_write(ncid, vn_output_particle_flux, output_particle_flux)
+	call cdf_write(ncid, vn_collision_species_option, collision_species_option)
 
 	! 1 dimension
 	call cdf_write(ncid, vn_s_wish, s_wish(1:nsurf))
@@ -195,7 +216,12 @@ subroutine write_output(total_time)
 	call cdf_write(ncid,vn_alphas,alphas)
 	call cdf_write(ncid,vn_boozmn_filename,boozmn_filename)
 	call cdf_write(ncid,vn_s_surf,s_surf)
-	call cdf_write(ncid,vn_particleFlux,particleFlux)
+	if (output_particle_flux) then
+		call cdf_write(ncid,vn_particleFlux,particleFlux)
+	end if
+	if (output_particle_flux .or. output_p_tensor) then
+		call cdf_write(ncid,vn_energy_integral,energy_integral)
+	end if
 
 	! 2 dimension
 	call cdf_write(ncid,vn_bmnc,bmnc)
@@ -203,6 +229,10 @@ subroutine write_output(total_time)
 	! 3 dimension
 	call cdf_write(ncid,vn_B,B)
 	call cdf_write(ncid,vn_nclass,nclass)
+	if (output_P_tensor) then
+		call cdf_write(ncid,vn_P_tensor_bb,P_tensor_bb)
+		call cdf_write(ncid,vn_P_tensor_I,P_tensor_I)
+	end if
 
 	! 4 dimension (summed over nwell)
 	call cdf_write(ncid,vn_J_invariant,sum(J_invariant,4))

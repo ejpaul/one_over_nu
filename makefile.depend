@@ -11,7 +11,7 @@ OBJ_FILES =  \
     surf_loop.o \
     write_output.o
 constants_mod.o:
-diagnostics_mod.o: extrema_mod.o grids_mod.o input_mod.o
+diagnostics_mod.o: extrema_mod.o grids_mod.o input_mod.o splines_mod.o
 extrema_mod.o: input_mod.o geometry_mod.o grids_mod.o
 find_bounce_point.o: geometry_mod.o constants_mod.o input_mod.o splines_mod.o
 flintegrate_mod.o: splines_mod.o geometry_mod.o constants_mod.o

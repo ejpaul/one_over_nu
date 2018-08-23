@@ -74,7 +74,9 @@ module splines_mod
 		allocate(spline_B(nsurf))
 		allocate(spline_dBdtheta(nsurf))
 		allocate(spline_dBdzeta(nsurf))
-		allocate(spline_d2Bdtheta2(nsurf))
+		if (output_P_tensor) then
+			allocate(spline_d2Bdtheta2(nsurf))
+		end if
 		do isurf=1,nsurf
 			call ezspline_init(spline_B(isurf),ntheta_spline,nzeta_spline,(/-1,-1/),(/-1,-1/),ierr)
 			call ezspline_error(ierr)
@@ -100,13 +102,16 @@ module splines_mod
 			call ezspline_setup(spline_dBdzeta(isurf),dBdzeta_for_spline(isurf,:,:),ierr,.true.)
 			call ezspline_error(ierr)
 
-			call ezspline_init(spline_d2Bdtheta2(isurf),ntheta_spline,nzeta_spline,(/-1,-1/),(/-1,-1/),ierr)
-			call ezspline_error(ierr)
-			spline_d2Bdtheta2(isurf)%x1 = thetas_spline
-			spline_d2Bdtheta2(isurf)%x2 = zetas_spline
-
-			call ezspline_setup(spline_d2Bdtheta2(isurf),d2Bdtheta2_for_spline(isurf,:,:),ierr,.true.)
-			call ezspline_error(ierr)
+			if (output_P_tensor) then
+				call ezspline_init(spline_d2Bdtheta2(isurf),ntheta_spline,&
+					nzeta_spline,(/-1,-1/),(/-1,-1/),ierr)
+				call ezspline_error(ierr)
+				spline_d2Bdtheta2(isurf)%x1 = thetas_spline
+				spline_d2Bdtheta2(isurf)%x2 = zetas_spline
+				call ezspline_setup(spline_d2Bdtheta2(isurf),&
+					d2Bdtheta2_for_spline(isurf,:,:),ierr,.true.)
+				call ezspline_error(ierr)
+			end if
 		end do
 
 		! Testing splines
@@ -208,7 +213,8 @@ module splines_mod
 		zeta_eval = zeta
 		theta_eval = theta
 		call spline_modulo(spline_B(isurf),theta_eval,zeta_eval)
-		call ezspline_interp(spline_B(isurf),theta_eval,zeta_eval,compute_B_spline,ierr)
+		call ezspline_interp(spline_B(isurf),theta_eval,zeta_eval,&
+			compute_B_spline,ierr)
 		call ezspline_error(ierr)
 
 	end function compute_B_spline
@@ -242,7 +248,8 @@ module splines_mod
 		zeta_eval = zeta
 		theta_eval = theta
 		call spline_modulo(spline_B(isurf),theta_eval,zeta_eval)
-		call ezspline_interp(spline_B(isurf),theta_eval,zeta_eval,compute_geometry_spline(B_index),ierr)
+		call ezspline_interp(spline_B(isurf),theta_eval,zeta_eval,&
+			compute_geometry_spline(B_index),ierr)
 		call ezspline_error(ierr)
 		call ezspline_interp(spline_dBdtheta(isurf),theta_eval,zeta_eval,&
 				compute_geometry_spline(dBdtheta_index),ierr)
@@ -253,6 +260,24 @@ module splines_mod
 
 	end function compute_geometry_spline
 
+! ===================================================
+! Function compute_d2Bdtheta2_spline
+!
+! This function computes the local d2Bdtheta2
+! using the EzSpline interface. As this is only needed
+! for the bounce integrals needed to compute the P
+! tensor, it has been separated from compute_geometry_spline.
+!
+! Input:
+! isurf		index in ssurf for calculation.
+! theta		theta for calculation
+! zeta		zeta for calculation.
+!
+! Output:
+! compute_d2Bdtheta2_spline		Interpolated value of
+!															d2Bdtheta2
+!
+! ===================================================
 	real(dp) function compute_d2Bdtheta2_spline(isurf,theta,zeta)
 
 		integer, intent(in) :: isurf
@@ -264,9 +289,9 @@ module splines_mod
 		theta_eval = theta
 		call spline_modulo(spline_B(isurf),theta_eval,zeta_eval)
 
-		call ezspline_interp(spline_d2Bdtheta2(isurf),theta_eval,zeta_eval,compute_d2Bdtheta2_spline,ierr)
+		call ezspline_interp(spline_d2Bdtheta2(isurf),theta_eval,zeta_eval,&
+			compute_d2Bdtheta2_spline,ierr)
 		call ezspline_error(ierr)
-
 
 	end function compute_d2Bdtheta2_spline
 
