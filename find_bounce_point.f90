@@ -24,7 +24,7 @@ subroutine find_bounce_point(isurf,zeta_left,zeta_right,alpha0,lambda,zeta_bounc
 	use constants_mod
 	use geometry_mod, only: iota
 	use input_mod, only: niter_root, root_search_tolerance
-	use splines_mod, only: compute_B_spline, compute_geometry_spline
+	use splines_mod, only: compute_B_spline, compute_geometry_spline, compute_dBdzeta_spline
 
 	implicit none
 
@@ -78,7 +78,7 @@ subroutine find_bounce_point(isurf,zeta_left,zeta_right,alpha0,lambda,zeta_bounc
 
 	! Compute derivative of (1-lambda*B) wrt zeta
 	dBdtheta = geometry(dBdtheta_index)
-	dBdzeta = geometry(dBdzeta_index)
+	dBdzeta = compute_dBdzeta_spline(isurf,alpha0+iota(isurf)*rts,rts)
 	df = -lambda*(iota(isurf)*dBdtheta + dBdzeta)
 
 	zeta_search(1) = rts
@@ -125,7 +125,7 @@ subroutine find_bounce_point(isurf,zeta_left,zeta_right,alpha0,lambda,zeta_bounc
       f_search(j+1) = f
 			! Compute derivative of (1-lambda*B) wrt zeta
 			dBdtheta = geometry(dBdtheta_index)
-			dBdzeta = geometry(dBdzeta_index)
+			dBdzeta = compute_dBdzeta_spline(isurf,alpha0+iota(isurf)*rts,rts)
       df = -lambda*(iota(isurf)*dBdtheta + dBdzeta)
       ! Maintain the bracket on the root
       if (f < 0) then

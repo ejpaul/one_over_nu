@@ -11,7 +11,8 @@ subroutine write_output(total_time)
 	use ezcdf
 	use grids_mod, only: alphas, lambdas
 	use extrema_mod, only: min_B, max_B, B, thetas, zetas
-	use geometry_mod, only: xm, xn, s_surf, ns, nmodes, nfp, iota, Boozer_I, Boozer_G, bmnc
+	use geometry_mod, only: xm, xn, s_surf, ns, nmodes, nfp, iota, Boozer_I, Boozer_G, bmnc, &
+			B_pest_mnc, mnmax_transform, xm_transform, xn_transform, B_pest_mnc, B_dot_grad_zeta_pest_mnc
 	use input_mod
 	use diagnostics_mod
 
@@ -51,7 +52,6 @@ subroutine write_output(total_time)
 		vn_lambdas = "lambdas", &
 		vn_alphas = "alphas", &
 		vn_boozmn_filename = "boozmn_filename", &
-		vn_nemov_metric = "nemov_metric", &
 		vn_one_over_nu_metric = "one_over_nu_metric", &
 		vn_min_B = "min_B", &
 		vn_max_B = "max_B", &
@@ -61,11 +61,16 @@ subroutine write_output(total_time)
 		vn_s_wish = "s_wish", &
 		vn_s_surf = "s_surf", &
 		vn_particleFlux = "particleFlux", &
-		vn_energy_integral = "energy_integral"
+		vn_energy_integral = "energy_integral", &
+		vn_wout_filename = "wout_filename", &
+		vn_xm_transform = "xm_transform", &
+		vn_xn_transform = "xn_transform"
 
 	! Arrays with dimension 2
 	character(len=*), parameter :: &
-		vn_bmnc = "bmnc"
+		vn_bmnc = "bmnc", &
+		vn_b_pest_mnc = "B_pest_mnc", &
+		vn_B_dot_grad_zeta_pest_mnc = "B_dot_grad_zeta_pest_mnc"
 
 	! Arrays with dimension 3
 	character(len=*), parameter :: &
@@ -80,10 +85,7 @@ subroutine write_output(total_time)
 		vn_dKdalpha = "dKdalpha", &
 		vn_I_bounce_integral = "I_bounce_integral", &
 		vn_one_over_nu_metric_before_integral = "one_over_nu_metric_before_integral", &
-		vn_K_bounce_integral = "K_bounce_integral", &
-		vn_H_bounce_integral = "H_bounce_integral", &
-		vn_nemov_metric_before_integral = "nemov_metric_before_integral"
-
+		vn_K_bounce_integral = "K_bounce_integral"
 
 	! Arrays with dimension 1
 	character(len=*), parameter, dimension(1) :: &
@@ -93,11 +95,14 @@ subroutine write_output(total_time)
 		nlambda_dim = (/'nlambda'/), &
 		nalpha_dim = (/'nalpha'/), &
 		string_length_dim = (/'string_length'/), &
-		nsurf_dim = (/'nsurf'/)
+		nsurf_dim = (/'nsurf'/), &
+		mnmax_transform_dim = (/'mnmax_transform'/)
 
 	! Arrays with dimension 2
 	character(len=*), parameter, dimension(2) :: &
-		nsurf_nmodes_dim = (/character(len=50) :: 'nsurf','nmodes' /)
+		nsurf_nmodes_dim = (/character(len=50) :: 'nsurf','nmodes' /), &
+		nsurf_mnmax_transform_dim = (/ character(len=50) :: &
+			'nsurf','mnmax_transform' /)
 
 	! Arrays with dimension 3
 	character(len=*), parameter, dimension(3) :: &
@@ -138,19 +143,29 @@ subroutine write_output(total_time)
 	call cdf_define(ncid,vn_thetas,thetas,dimname=ntheta_dim)
 	call cdf_define(ncid,vn_zetas,zetas,dimname=nzeta_dim)
 	call cdf_define(ncid,vn_s_wish,s_wish(1:nsurf),dimname=nsurf_dim)
-	call cdf_define(ncid,vn_xm,xm,dimname=nmodes_dim)
-	call cdf_define(ncid,vn_xn,xn,dimname=nmodes_dim)
+	if (geometry_option == 1) then
+		call cdf_define(ncid,vn_xm,xm,dimname=nmodes_dim)
+		call cdf_define(ncid,vn_xn,xn,dimname=nmodes_dim)
+	else
+		call cdf_define(ncid,vn_xm_transform,xm_transform,dimname=mnmax_transform_dim)
+		call cdf_define(ncid,vn_xn_transform,xn_transform,dimname=mnmax_transform_dim)
+	end if
 	call cdf_define(ncid,vn_lambdas,lambdas,dimname=nlambda_dim)
 	call cdf_define(ncid,vn_alphas,alphas,dimname=nalpha_dim)
-	call cdf_define(ncid,vn_boozmn_filename,boozmn_filename,dimname=string_length_dim)
-	call cdf_define(ncid, vn_nemov_metric, nemov_metric, dimname=nsurf_dim)
+	if (geometry_option==1) then
+		call cdf_define(ncid,vn_boozmn_filename,boozmn_filename,dimname=string_length_dim)
+	else
+		call cdf_define(ncid,vn_wout_filename,wout_filename,dimname=string_length_dim)
+	end if
 	call cdf_define(ncid, vn_s_surf, s_surf, dimname=nsurf_dim)
 	call cdf_define(ncid, vn_min_B, min_B, dimname=nsurf_dim)
 	call cdf_define(ncid, vn_max_B, max_B, dimname=nsurf_dim)
 	call cdf_define(ncid, vn_one_over_nu_metric, one_over_nu_metric, dimname=nsurf_dim)
 	call cdf_define(ncid, vn_iota, iota, dimname=nsurf_dim)
-	call cdf_define(ncid, vn_Boozer_G, Boozer_G, dimname=nsurf_dim)
-	call cdf_define(ncid, vn_Boozer_I, Boozer_I, dimname=nsurf_dim)
+	if (geometry_option == 1) then
+		call cdf_define(ncid, vn_Boozer_G, Boozer_G, dimname=nsurf_dim)
+		call cdf_define(ncid, vn_Boozer_I, Boozer_I, dimname=nsurf_dim)
+	end if
 	if (output_particle_flux) then
 		call cdf_define(ncid, vn_particleFlux, particleFlux, dimname=nsurf_dim)
 	end if
@@ -159,7 +174,13 @@ subroutine write_output(total_time)
 	end if
 
 	! 2 dimension
-	call cdf_define(ncid,vn_bmnc,bmnc,dimname=nsurf_nmodes_dim)
+	if (geometry_option==1) then
+		call cdf_define(ncid,vn_bmnc,bmnc,dimname=nsurf_nmodes_dim)
+	else
+		call cdf_define(ncid,vn_B_pest_mnc,B_pest_mnc,dimname=nsurf_mnmax_transform_dim)
+		call cdf_define(ncid,vn_B_dot_grad_zeta_pest_mnc,B_dot_grad_zeta_pest_mnc, &
+			dimname=nsurf_mnmax_transform_dim)
+	end if
 
 	! 3 dimension
 	call cdf_define(ncid,vn_B,B,dimname=nsurf_ntheta_nzeta_dim)
@@ -170,12 +191,12 @@ subroutine write_output(total_time)
 	end if
 
 	! 4 dimension (summed over nwell dimension)
-	call cdf_define(ncid,vn_J_invariant,sum(J_invariant,4),dimname=nsurf_nlambda_nalpha_dim)
+	if (output_J) then
+		call cdf_define(ncid,vn_J_invariant,sum(J_invariant,4),dimname=nsurf_nlambda_nalpha_dim)
+	end if
 	call cdf_define(ncid,vn_dKdalpha,sum(dKdalpha,4),dimname=nsurf_nlambda_nalpha_dim)
 	call cdf_define(ncid,vn_I_bounce_integral,sum(I_bounce_integral,4),dimname=nsurf_nlambda_nalpha_dim)
 	call cdf_define(ncid,vn_one_over_nu_metric_before_integral,sum(one_over_nu_metric_before_integral,4),dimname=nsurf_nlambda_nalpha_dim)
-	call cdf_define(ncid,vn_H_bounce_integral,sum(H_bounce_integral,4),dimname=nsurf_nlambda_nalpha_dim)
-	call cdf_define(ncid,vn_nemov_metric_before_integral,sum(nemov_metric_before_integral,4),dimname=nsurf_nlambda_nalpha_dim)
 
 	! scalars
 	call cdf_write(ncid, vn_nfp, nfp)
@@ -187,7 +208,9 @@ subroutine write_output(total_time)
 	call cdf_write(ncid, vn_Delta_zeta, Delta_zeta)
 	call cdf_write(ncid, vn_max_search_in_zeta, max_search_in_zeta)
 	call cdf_write(ncid, vn_ns, ns)
-	call cdf_write(ncid, vn_nmodes, nmodes)
+	if (geometry_option==1) then
+		call cdf_write(ncid, vn_nmodes, nmodes)
+	end if
 	call cdf_write(ncid, vn_nwell, nwell)
 	call cdf_write(ncid, vn_niter_newton, niter_newton)
 	call cdf_write(ncid, vn_tol_newton, tol_newton)
@@ -199,22 +222,32 @@ subroutine write_output(total_time)
 
 	! 1 dimension
 	call cdf_write(ncid, vn_s_wish, s_wish(1:nsurf))
-	call cdf_write(ncid, vn_nemov_metric, nemov_metric)
 	call cdf_write(ncid, vn_one_over_nu_metric, one_over_nu_metric)
 	call cdf_write(ncid, vn_max_B, max_B)
 	call cdf_write(ncid, vn_min_B, min_B)
-	call cdf_write(ncid,vn_thetas,thetas)
-	call cdf_write(ncid,vn_zetas,zetas)
+	call cdf_write(ncid, vn_thetas,thetas)
+	call cdf_write(ncid, vn_zetas,zetas)
 	call cdf_write(ncid, vn_iota, iota)
-	call cdf_write(ncid, vn_Boozer_G, Boozer_G)
-	call cdf_write(ncid, vn_Boozer_I, Boozer_I)
-	call cdf_write(ncid,vn_xm,xm)
-	call cdf_write(ncid,vn_xn,xn)
+	if (geometry_option==1) then
+		call cdf_write(ncid, vn_Boozer_G, Boozer_G)
+		call cdf_write(ncid, vn_Boozer_I, Boozer_I)
+		call cdf_write(ncid,vn_xm,xm)
+		call cdf_write(ncid,vn_xn,xn)
+	else
+		call cdf_write(ncid, vn_B_pest_mnc, B_pest_mnc)
+		call cdf_write(ncid, vn_B_dot_grad_zeta_pest_mnc, B_dot_grad_zeta_pest_mnc)
+		call cdf_write(ncid, vn_xm_transform, xm_transform)
+		call cdf_write(ncid, vn_xn_transform, xn_transform)
+	end if
 	call cdf_write(ncid,vn_thetas,thetas)
 	call cdf_write(ncid,vn_zetas,zetas)
 	call cdf_write(ncid,vn_lambdas,lambdas)
 	call cdf_write(ncid,vn_alphas,alphas)
-	call cdf_write(ncid,vn_boozmn_filename,boozmn_filename)
+	if (geometry_option == 1) then
+		call cdf_write(ncid,vn_boozmn_filename,trim(boozmn_filename))
+	else
+		call cdf_write(ncid,vn_wout_filename,trim(wout_filename))
+	end if
 	call cdf_write(ncid,vn_s_surf,s_surf)
 	if (output_particle_flux) then
 		call cdf_write(ncid,vn_particleFlux,particleFlux)
@@ -224,7 +257,9 @@ subroutine write_output(total_time)
 	end if
 
 	! 2 dimension
-	call cdf_write(ncid,vn_bmnc,bmnc)
+	if (geometry_option == 1) then
+		call cdf_write(ncid,vn_bmnc,bmnc)
+	end if
 
 	! 3 dimension
 	call cdf_write(ncid,vn_B,B)
@@ -235,12 +270,12 @@ subroutine write_output(total_time)
 	end if
 
 	! 4 dimension (summed over nwell)
-	call cdf_write(ncid,vn_J_invariant,sum(J_invariant,4))
+	if (output_J) then
+		call cdf_write(ncid,vn_J_invariant,sum(J_invariant,4))
+	end if 
 	call cdf_write(ncid,vn_dKdalpha,sum(dKdalpha,4))
 	call cdf_write(ncid,vn_I_bounce_integral,sum(I_bounce_integral,4))
 	call cdf_write(ncid,vn_one_over_nu_metric_before_integral,sum(one_over_nu_metric_before_integral,4))
-	call cdf_write(ncid,vn_nemov_metric_before_integral,sum(nemov_metric_before_integral,4))
-	call cdf_write(ncid,vn_H_bounce_integral,sum(H_bounce_integral,4))
 
 	call cdf_close(ncid)
 

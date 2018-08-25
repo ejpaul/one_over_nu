@@ -5,7 +5,7 @@ module flintegrate_mod
 	use omp_lib
 	use ezspline
 	use splines_mod, only: compute_geometry_spline, compute_B_spline
-	use geometry_mod, only: iota, nfp, Boozer_I, Boozer_G
+	use geometry_mod, only: iota, nfp
 	use constants_mod
 
 	implicit none
@@ -30,8 +30,9 @@ module flintegrate_mod
 
 		use grids_mod, only: alphas, lambdas
 		use extrema_mod, only: min_B, max_B
-		use diagnostics_mod, only: J_invariant, dKdalpha, I_bounce_integral, one_over_nu_metric_before_integral, K_bounce_integral, nemov_metric_before_integral, H_bounce_integral, nclass, d2Kdalpha2, dIdalpha
-		use input_mod, only: verbose, Delta_zeta, max_search_in_zeta, nintegral, nwell, nalpha, output_P_tensor
+		use diagnostics_mod, only: J_invariant, dKdalpha, I_bounce_integral, &
+			one_over_nu_metric_before_integral, K_bounce_integral,nclass, d2Kdalpha2, dIdalpha
+		use input_mod, only: verbose, Delta_zeta, max_search_in_zeta, nintegral, nwell, nalpha, output_P_tensor, output_J
 
 		implicit none
 
@@ -114,19 +115,25 @@ module flintegrate_mod
 					end if
 
 					if (k_well < nwell) then
-						J_invariant(isurf,ilambda,ialpha,k_well) = integral(J_index)
+						if (output_J) then
+							J_invariant(isurf,ilambda,ialpha,k_well) = integral(J_index)
+						end if
 						dKdalpha(isurf,ilambda,ialpha,k_well) = integral(dKdalpha_index)
 						I_bounce_integral(isurf,ilambda,ialpha,k_well) = integral(I_index)
-						H_bounce_integral(isurf,ilambda,ialpha,k_well) = integral(H_index)
-						d2Kdalpha2(isurf,ilambda,ialpha,k_well) = integral(d2Kdalpha2_index)
-						dIdalpha(isurf,ilambda,ialpha,k_well) = integral(dIdalpha_index)
+						if (output_P_tensor) then
+							d2Kdalpha2(isurf,ilambda,ialpha,k_well) = integral(d2Kdalpha2_index)
+							dIdalpha(isurf,ilambda,ialpha,k_well) = integral(dIdalpha_index)
+						end if
 					else
-						J_invariant(isurf,ilambda,ialpha,nwell) = J_invariant(isurf,ilambda,ialpha,nwell) + integral(J_index)
+						if (output_J) then
+							J_invariant(isurf,ilambda,ialpha,nwell) = J_invariant(isurf,ilambda,ialpha,nwell) + integral(J_index)
+						end if
 						dKdalpha(isurf,ilambda,ialpha,nwell) = dKdalpha(isurf,ilambda,ialpha,nwell) + integral(dKdalpha_index)
 						I_bounce_integral(isurf,ilambda,ialpha,nwell) = I_bounce_integral(isurf,ilambda,ialpha,nwell) + integral(I_index)
-						H_bounce_integral(isurf,ilambda,ialpha,k_well) = H_bounce_integral(isurf,ilambda,ialpha,nwell) + integral(H_index)
-						d2Kdalpha2(isurf,ilambda,ialpha,nwell) = d2Kdalpha2(isurf,ilambda,ialpha,nwell) + integral(d2Kdalpha2_index)
-						dIdalpha(isurf,ilambda,ialpha,nwell) = dIdalpha(isurf,ilambda,ialpha,nwell) + integral(dIdalpha_index)
+						if (output_P_tensor) then
+							d2Kdalpha2(isurf,ilambda,ialpha,nwell) = d2Kdalpha2(isurf,ilambda,ialpha,nwell) + integral(d2Kdalpha2_index)
+							dIdalpha(isurf,ilambda,ialpha,nwell) = dIdalpha(isurf,ilambda,ialpha,nwell) + integral(dIdalpha_index)
+						end if
 					end if
 				end if
 				modB_left = modB
@@ -313,14 +320,15 @@ module flintegrate_mod
 
 		use constants_mod
 		use input_mod
-		use splines_mod, only: compute_d2Bdtheta2_spline
+		use splines_mod
+		use geometry_mod, only: Boozer_G, Boozer_I, iota
 
 		integer, intent(in) :: isurf, which_integral
 		real(dp), intent(in) :: alpha0, lambda, t, zeta_b
 		real(dp), dimension(integrand_length) :: bounce_integrand
 		real(dp), dimension(geometry_length) :: geometry
-		real(dp) :: BB, dBBdtheta, dBBdzeta, theta, radicand, d2BBdtheta2, zeta, dzetadt
-		real(dp) :: inv_radicand
+		real(dp) :: BB, dBBdtheta, dBBdzeta, theta, radicand, d2BBdtheta2, zeta, dzetadt, &
+			inv_radicand, BBdotgradzeta, dBBdotgradzetadtheta, d2BBdotgradzetadtheta2
 		integer :: ierr
 
 		if (which_integral == 0) then
@@ -334,7 +342,7 @@ module flintegrate_mod
 			zeta = zeta_b - (t**2)
 			dzetadt = -2.0*t
 		else
-			stop "Incorrect argument which_integral to bounce_integral."
+			stop "Incorrect argument which_integral to bounce_integrand."
 		end if
 
 		theta = alpha0 + iota(isurf)*zeta
@@ -342,27 +350,30 @@ module flintegrate_mod
 		geometry = compute_geometry_spline(isurf,theta,zeta)
 		BB = geometry(B_index)
 		dBBdtheta = geometry(dBdtheta_index)
-		dBBdzeta = geometry(dBdzeta_index)
+		BBdotgradzeta = geometry(Bdotgradzeta_index)
+		dBBdotgradzetadtheta = geometry(dBdotgradzetadtheta_index)
 
 		radicand = max((1-lambda*BB),0.0)
-		inv_radicand = max(1.0/(1-lambda*BB),0.0)
 
-		bounce_integrand(dKdalpha_index) = 2*(Boozer_G(isurf)+iota(isurf)*Boozer_I(isurf)) &
-			*dBBdtheta*(sqrt(radicand)*(BB*lambda-4)/(2*(BB**3)))
-		bounce_integrand(H_index) = 2*(sqrt(radicand)**3 + 3*sqrt(radicand))*(Boozer_I(isurf)*dBBdzeta &
-			- Boozer_G(isurf)*dBBdtheta)/(BB**3)
-		bounce_integrand(I_index) = 2*(Boozer_G(isurf)+iota(isurf)*Boozer_I(isurf)) &
-			*sqrt(radicand)/(BB**2)
-		bounce_integrand(J_index) = 2*(Boozer_G(isurf)+iota(isurf)*Boozer_I(isurf)) &
-			*sqrt(radicand)/BB
+		bounce_integrand(dKdalpha_index) = -3.0*sqrt(radicand)*lambda*dBBdtheta/BBdotgradzeta &
+			 - 2*(sqrt(radicand)**3)*dBBdotgradzetadtheta/(BBdotgradzeta**2)
+		bounce_integrand(I_index) = 2.0*sqrt(radicand)/BBdotgradzeta
+		if (output_J) then
+			bounce_integrand(J_index) = 2.0*BB*sqrt(radicand)/BBdotgradzeta
+		end if
 		! Compute bounce integrals for P tensor
 		if (which_integral .ne. 0) then
+			inv_radicand = max(1.0/(1-lambda*BB),0.0)
 			d2BBdtheta2 = compute_d2Bdtheta2_spline(isurf,theta,zeta)
-			bounce_integrand(d2Kdalpha2_index) = 2*(Boozer_G(isurf)+iota(isurf)*Boozer_I(isurf)) &
-				*(d2BBdtheta2*(sqrt(radicand)*(BB*lambda-4)/(2*(BB**3))) &
-				+ (dBBdtheta**2)*(3*(8 - 8*BB*lambda + (BB**2)*(lambda**2))*sqrt(inv_radicand)/(4*(BB**4))))
-			bounce_integrand(dIdalpha_index) = 2*(Boozer_G(isurf)+iota(isurf)*Boozer_I(isurf)) &
-				*dBBdtheta*(3*BB*lambda - 4)*sqrt(inv_radicand)/(2*(BB**3))
+			d2BBdotgradzetadtheta2 = geometry(d2Bdotgradzetadtheta2_index)
+			bounce_integrand(d2Kdalpha2_index) = -3.0*sqrt(radicand)*lambda*d2BBdtheta2/BBdotgradzeta &
+				+ 1.5*lambda*lambda*(dBBdtheta**2)*sqrt(inv_radicand)/BBdotgradzeta &
+				+ 3.0*sqrt(radicand)*lambda*dBBdtheta*dBBdotgradzetadtheta/(BBdotgradzeta**2) &
+				- 2.0*(sqrt(radicand)**3)*d2BBdotgradzetadtheta2/(BBdotgradzeta**2) &
+				+ 3.0*sqrt(radicand)*lambda*dBBdtheta*dBBdotgradzetadtheta/BBdotgradzeta &
+				+ 4.0*(sqrt(radicand)**3)*(dBBdotgradzetadtheta**2)/(BBdotgradzeta**3)
+			bounce_integrand(dIdalpha_index) = -3.0*lambda*dBBdtheta*sqrt(inv_radicand)/BBdotgradzeta &
+				- 2.0*sqrt(radicand)*dBBdotgradzetadtheta/(BBdotgradzeta**2)
 			bounce_integrand = bounce_integrand*dzetadt
 		end if
 

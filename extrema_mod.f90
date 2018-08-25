@@ -83,7 +83,6 @@ module extrema_mod
 			! Find exact extrema using newton solve
 			call newton_opt(isurf,thetas(theta_min_coarse),zetas(zeta_min_coarse),&
 				theta_min,zeta_min,thetas(theta_max_coarse),zetas(zeta_max_coarse),theta_max,zeta_max)
-
 			min_B(isurf) = compute_B(isurf,theta_min,zeta_min)
 			if (verbose) then
 				print *,"B_min: ", min_B(isurf)
@@ -127,7 +126,7 @@ module extrema_mod
 	subroutine newton_opt(isurf,theta_min_rough,zeta_min_rough,theta_min,&
 			zeta_min,theta_max_rough,zeta_max_rough,theta_max,zeta_max)
 
-		use geometry_mod, only: compute_geometry, xm, xn, bmnc
+		use geometry_mod
 		use constants_mod
 
 		implicit none
@@ -136,8 +135,9 @@ module extrema_mod
 		real(dp), intent(out) :: theta_min, zeta_min, theta_max, zeta_max
 		integer, intent(in) :: isurf
 
-		real(dp) :: dBdtheta,dBdzeta,dB2dtheta2,dB2dzeta2,dB2dthetadzeta
-		real(dp) :: minus_dBdtheta,minus_dBdzeta,minus_dB2dtheta2,minus_dB2dzeta2,minus_dB2dthetadzeta
+		real(dp) :: dBdtheta,dBdzeta,d2Bdtheta2,d2Bdzeta2,d2Bdthetadzeta
+		real(dp) :: minus_dBdtheta,minus_dBdzeta,minus_d2Bdtheta2,&
+			minus_d2Bdzeta2,minus_d2Bdthetadzeta
 
 		real(dp) :: theta_old, zeta_old, det, theta_new, zeta_new
 		real(dp) :: geometry(geometry_length)
@@ -150,14 +150,14 @@ module extrema_mod
 			! Compute gradient and Hessian matrix
 			geometry = compute_geometry(isurf,theta_old,zeta_old)
 			dBdtheta = geometry(dBdtheta_index)
-			dBdzeta = geometry(dBdzeta_index)
-			dB2dtheta2 = -dot_product(bmnc(isurf,:),(xm**2)*cos(xm*theta_old-xn*zeta_old))
-			dB2dzeta2 = -dot_product(bmnc(isurf,:),(xn**2)*cos(xm*theta_old-xn*zeta_old))
-			dB2dthetadzeta = dot_product(bmnc(isurf,:),xm*xn*cos(xm*theta_old-xn*zeta_old))
-			det = abs(dB2dtheta2*dB2dzeta2-dB2dthetadzeta**2)
+			dBdzeta = compute_dBdzeta(isurf,theta_old,zeta_old)
+			d2Bdtheta2 = compute_d2Bdtheta2(isurf,theta_old,zeta_old)
+			d2Bdthetadzeta = compute_d2Bdthetadzeta(isurf,theta_old,zeta_old)
+			d2Bdzeta2 = compute_d2Bdzeta2(isurf,theta_old,zeta_old)
+			det = abs(d2Bdtheta2*d2Bdzeta2-d2Bdthetadzeta**2)
 			! Take Newton step
-			theta_new = theta_old - (dB2dzeta2*dBdtheta - dB2dthetadzeta*dBdzeta)/det
-			zeta_new = zeta_old - (dB2dtheta2*dBdzeta - dB2dthetadzeta*dBdtheta)/det
+			theta_new = theta_old - (d2Bdzeta2*dBdtheta - d2Bdthetadzeta*dBdzeta)/det
+			zeta_new = zeta_old - (d2Bdtheta2*dBdzeta - d2Bdthetadzeta*dBdtheta)/det
 			if (abs(theta_new - theta_old) < tol_newton .and. abs(zeta_new - zeta_old) < tol_newton) then
 				code = 0
 				exit
@@ -179,14 +179,14 @@ module extrema_mod
 			! Compute gradient and Hessian matrix
 			geometry = compute_geometry(isurf,theta_old,zeta_old)
 			minus_dBdtheta = -geometry(dBdtheta_index)
-			minus_dBdzeta = -geometry(dBdzeta_index)
-			minus_dB2dtheta2 = dot_product(bmnc(isurf,:),(xm**2)*cos(xm*theta_old-xn*zeta_old))
-			minus_dB2dzeta2 = dot_product(bmnc(isurf,:),(xn**2)*cos(xm*theta_old-xn*zeta_old))
-			minus_dB2dthetadzeta = -dot_product(bmnc(isurf,:),xm*xn*cos(xm*theta_old-xn*zeta_old))
-			det = abs(minus_dB2dtheta2*minus_dB2dzeta2-minus_dB2dthetadzeta**2)
+			minus_dBdzeta = -compute_dBdzeta(isurf,theta_old,zeta_old)
+			minus_d2Bdtheta2 = -compute_d2Bdtheta2(isurf,theta_old,zeta_old)
+			minus_d2Bdzeta2 = -compute_d2Bdzeta2(isurf,theta_old,zeta_old)
+			minus_d2Bdthetadzeta = -compute_d2Bdthetadzeta(isurf,theta_old,zeta_old)
+			det = abs(minus_d2Bdtheta2*minus_d2Bdzeta2-minus_d2Bdthetadzeta**2)
 			! Take Newton step
-			theta_new = theta_old - (minus_dB2dzeta2*minus_dBdtheta - minus_dB2dthetadzeta*minus_dBdzeta)/det
-			zeta_new = zeta_old - (minus_dB2dtheta2*minus_dBdzeta - minus_dB2dthetadzeta*minus_dBdtheta)/det
+			theta_new = theta_old - (minus_d2Bdzeta2*minus_dBdtheta - minus_d2Bdthetadzeta*minus_dBdzeta)/det
+			zeta_new = zeta_old - (minus_d2Bdtheta2*minus_dBdzeta - minus_d2Bdthetadzeta*minus_dBdtheta)/det
 			if (abs(theta_new - theta_old) < tol_newton .and. abs(zeta_new - zeta_old) < tol_newton) then
 				code = 0
 				exit

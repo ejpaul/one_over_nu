@@ -6,12 +6,20 @@ module input_mod
 	! Input parameters for Newton minimization to find B extrema
 	integer :: niter_newton = 10
 	real(dp) :: tol_newton = 1e-3
+	! Parameters for vmec coordinate transormation to straight field line theta
+	real(dp) :: mpol_transform_refinement = 2.0
+	real(dp) :: ntor_transform_refinement = 2.0
+	real(dp) :: transform_abserr = 1.0e-10
+	real(dp) :: transform_relerr = 1.0e-10
 	! Grid dimensions
 	integer :: nalpha = 100
 	integer :: nlambda = 100
 	! Geometry input
+	! 1 = boozmn, 2 = VMEC
+	integer :: geometry_option = 1
 	integer :: nsurf ! length of s_wish
 	character(len=200) :: boozmn_filename
+	character(len=200) :: wout_filename
 	! Input parameters for splines
 	integer :: ntheta_spline = 200, nzeta_spline = 200
 	! Resolution parameters
@@ -35,6 +43,7 @@ module input_mod
 	! collision_species_option = 2 -> self collisions. q_e(2) not used.
 	integer :: collision_species_option = 1
 	logical :: output_p_tensor = .false.
+	logical :: output_J = .false.
 	! Profiles of length s_wish_length
 	! T_ev - Temperature (eletron volts)
 	! n_m3 - density (m^{-3})
@@ -46,7 +55,7 @@ module input_mod
 	real(dp) :: m_kg
 	integer, dimension(2) :: q_e
 
-	namelist / one_over_nu_nml / nlambda, nalpha, nintegral, Delta_zeta, max_search_in_zeta, ntheta, nzeta, boozmn_filename, s_wish, nsurf, root_search_tolerance, Niter_root, nwell, niter_newton, tol_newton, verbose, ntheta_spline, nzeta_spline, output_particle_flux, T_ev, dTdpsi, n_m3, dlnndpsi, dlnTdpsi, m_kg, q_e, collision_species_option, output_p_tensor
+	namelist / one_over_nu_nml / nlambda, nalpha, nintegral, Delta_zeta, max_search_in_zeta, ntheta, nzeta, boozmn_filename, s_wish, nsurf, root_search_tolerance, Niter_root, nwell, niter_newton, tol_newton, verbose, ntheta_spline, nzeta_spline, output_particle_flux, T_ev, dTdpsi, n_m3, dlnndpsi, dlnTdpsi, m_kg, q_e, collision_species_option, output_p_tensor, geometry_option, ntor_transform_refinement, mpol_transform_refinement, transform_abserr, transform_relerr, wout_filename, output_J
 
 	character(len=200) :: inputFilename
 
@@ -119,7 +128,17 @@ module input_mod
 			 print "(a,i5)","nwell = ",nwell
 			 print "(a,i5)","ntheta_spline = ",ntheta_spline
 			 print "(a,i5)","nzeta_spline = ",nzeta_spline
-			 print "(a,a)","boozmn_filename = ",boozmn_filename
+			 print "(a,i1)","geometry_option = ", geometry_option
+			 print "(a,l)","output_J = ", output_J
+			 if (geometry_option == 1) then
+			 		print "(a,a)","boozmn_filename = ",boozmn_filename
+			 else
+					print "(a,a)","wout_filename = ",wout_filename
+					print "(a,E15.7)","mpol_transform_refinement = ", mpol_transform_refinement
+					print "(a,E15.7)","ntor_transform_refinement = ", ntor_transform_refinement
+					print "(a,E15.7)","transform_abserr = ", transform_abserr
+					print "(a,E15.7)","transform_relerr = ", transform_relerr
+			 end if
 			 print "(a,E15.7)","max_search_in_zeta = ", max_search_in_zeta
 			 if (nsurf > 1) then
 				 write(*,fmt = "(a,E15.7)", advance = "no") "s_wish = ", s_wish(1)
@@ -182,7 +201,6 @@ module input_mod
 			 end if
 			 print "(a,l)","output_p_tensor = ", output_p_tensor
 		end if
-
 
 	end subroutine read_input
 
@@ -276,6 +294,18 @@ module input_mod
 			if (verbose) then
 				print *,"Self collision option chosen. q_e(2) will be ignored."
 			end if
+		end if
+		if (geometry_option < 1 .or. geometry_option > 2) then
+			stop "Error! Geometry_option must be 1 or 2."
+		end if
+		if (mpol_transform_refinement < 1 .or. ntor_transform_refinement < 1) then
+			print *,"Warning. mpol_transform_refinement and mpol_transform_refinement should be > 1."
+		end if
+		if (transform_relerr < 0 .or. transform_relerr > 1) then
+			print *,"transform_relerr should be between 0 and 1."
+		end if
+		if (transform_abserr < 0 .or. transform_abserr > 1) then
+			print *,"transform_abserr should be between 0 and 1."
 		end if
 
 	end subroutine validate_input

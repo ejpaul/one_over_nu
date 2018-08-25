@@ -14,10 +14,12 @@ module constants_mod
 	integer, parameter :: s_wish_length = 100
 
 	! Fixed lengths and indices
-	integer, parameter :: geometry_length = 3
+	integer, parameter :: geometry_length = 5
 	integer, parameter :: B_index = 1
 	integer, parameter :: dBdtheta_index = 2
-	integer, parameter :: dBdzeta_index = 3
+	integer, parameter :: Bdotgradzeta_index = 3
+	integer, parameter :: dBdotgradzetadtheta_index = 4
+	integer, parameter :: d2Bdotgradzetadtheta2_index = 5
 
 	! Physical constants
 	! permitivity of free space (F/m)

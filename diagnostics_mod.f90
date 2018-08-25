@@ -3,11 +3,11 @@ module diagnostics_mod
 	use stel_kinds
 
 	! Bounce integrals
-	real(dp), dimension(:,:,:,:), allocatable :: J_invariant, dKdalpha, I_bounce_integral, one_over_nu_metric_before_integral, K_bounce_integral, nemov_metric_before_integral, H_bounce_integral, dIdalpha, d2Kdalpha2
+	real(dp), dimension(:,:,:,:), allocatable :: J_invariant, dKdalpha, I_bounce_integral, one_over_nu_metric_before_integral, K_bounce_integral, dIdalpha, d2Kdalpha2
 	! Number of classes for each grid point
 	integer, dimension(:,:,:), allocatable :: nclass
 	! Output metrics
-	real(dp), dimension(:), allocatable :: one_over_nu_metric, nemov_metric
+	real(dp), dimension(:), allocatable :: one_over_nu_metric
 	! Paritlce flux - dimension T m^{-1} s^{-1}
 	real(dp), dimension(:), allocatable :: particleflux
 	real(dp), dimension(:), allocatable :: energy_integral
@@ -25,36 +25,36 @@ module diagnostics_mod
  ! ===================================================
 	subroutine init_diagnostics()
 
-		use input_mod, only: nsurf, nlambda, nalpha, nwell
+		use input_mod, only: nsurf, nlambda, nalpha, nwell, output_J, &
+			output_P_tensor
 
 		implicit none
 
 		allocate(one_over_nu_metric_before_integral(nsurf,&
 			nlambda,nalpha,nwell))
-		allocate(nemov_metric_before_integral(nsurf,nlambda,&
-			nalpha,nwell))
 		one_over_nu_metric_before_integral = 0
-		nemov_metric_before_integral = 0
 
 		allocate(one_over_nu_metric(nsurf))
-		allocate(nemov_metric(nsurf))
 		one_over_nu_metric = 0
-		nemov_metric = 0
 
-		allocate(J_invariant(nsurf,nlambda,nalpha,nwell))
+		if (output_J) then
+			allocate(J_invariant(nsurf,nlambda,nalpha,nwell))
+			J_invariant = 0
+		end if
 		allocate(I_bounce_integral(nsurf,nlambda,nalpha,nwell))
-		allocate(H_bounce_integral(nsurf,nlambda,nalpha,nwell))
 		allocate(dKdalpha(nsurf,nlambda,nalpha,nwell))
-		allocate(d2Kdalpha2(nsurf,nlambda,nalpha,nwell))
-		allocate(dIdalpha(nsurf,nlambda,nalpha,nwell))
+		if (output_P_tensor) then
+			allocate(d2Kdalpha2(nsurf,nlambda,nalpha,nwell))
+			allocate(dIdalpha(nsurf,nlambda,nalpha,nwell))
+			d2Kdalpha2 = 0
+			dIdalpha = 0
+		end if
 		allocate(nclass(nsurf,nlambda,nalpha))
-		J_invariant = 0
+
 		I_bounce_integral = 0
-		H_bounce_integral = 0
 		dKdalpha = 0
 		nclass = 0
-		d2Kdalpha2 = 0
-		dIdalpha = 0
+
 
 	end subroutine init_diagnostics
 
@@ -92,10 +92,6 @@ module diagnostics_mod
 						(dKdalpha(isurf,ilambda,ialpha,iclass)**2) &
 						/I_bounce_integral(isurf,ilambda,ialpha,iclass) &
 						*(1.0/lambda)
-					nemov_metric_before_integral(isurf,ilambda,ialpha,iclass) = &
-						(H_bounce_integral(isurf,ilambda,ialpha,iclass)**2) &
-						/I_bounce_integral(isurf,ilambda,ialpha,iclass) &
-						*(1.0/lambda)
 				end do
 			end do
 		end do
@@ -105,14 +101,10 @@ module diagnostics_mod
 			0.5*one_over_nu_metric_before_integral(isurf,1,:,:)
 		one_over_nu_metric_before_integral(isurf,nlambda,:,:) = &
 			0.5*one_over_nu_metric_before_integral(isurf,nlambda,:,:)
-		nemov_metric_before_integral(isurf,1,:,:) = 0.5*nemov_metric_before_integral(isurf,1,:,:)
-		nemov_metric_before_integral(isurf,nlambda,:,:) = &
-			0.5*nemov_metric_before_integral(isurf,nlambda,:,:)
 
 		! Compute integrals
 		one_over_nu_metric(isurf) = &
 			sum(one_over_nu_metric_before_integral(isurf,:,:,:))*dalpha*dlambda(isurf)
-		nemov_metric(isurf) = sum(nemov_metric_before_integral(isurf,:,:,:))*dalpha*dlambda(isurf)
 
 		if (output_particle_flux .or. output_p_tensor) then
 			call compute_energy_integral()
@@ -152,8 +144,12 @@ module diagnostics_mod
 
 		do isurf = 1, nsurf
 			! Compute vprime using spline grid
-			vprime = (Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf)) &
-				*sum(1.0/B_for_spline(isurf,:,:)**2)*dtheta_spline*dzeta_spline
+			if (geometry_option==1) then
+				vprime = (Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf)) &
+					*sum(1.0/B_for_spline(isurf,:,:)**2)*dtheta_spline*dzeta_spline
+			else
+				vprime = sum(1.0/Bdotgradzeta_for_spline(isurf,:,:))*dtheta_spline*dzeta_spline
+			end if
 
 			prefactor = -pi*(m_kg**2)/(9*vprime*(e**2)*(q_e(1)**2))
 

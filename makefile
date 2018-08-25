@@ -14,7 +14,7 @@ else ifeq ($(HOSTNAME),cori)
 else
 	FC = mpif90
 	EXTRA_COMPILE_FLAGS = -fopenmp -I/opt/local/include -ffree-line-length-none
-    EXTRA_LINK_FLAGS =  -fopenmp -L/opt/local/lib -lnetcdff  -lnetcdf
+    EXTRA_LINK_FLAGS =  -fopenmp -L/opt/local/lib -lnetcdff  -lnetcdf -framework Accelerate
 endif
 
 TARGET = one_over_nu

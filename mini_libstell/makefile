@@ -19,7 +19,7 @@ LIBSTELL_OBJ_FILES = ezcdf.o ezcdf_GenPut.o ezcdf_inqvar.o stel_constants.o v3_u
     r8gridintrp2d.o r8gridintrp3d.o gridpc2.o gridpc3.o gridtricub.o herm1ev.o \
     herm2ev.o herm3ev.o pc1ev.o pc2ev.o pc3ev.o r8evbicub.o r8evspline.o \
     r8evtricub.o r8gridbicub.o r8gridherm2.o r8gridherm3.o r8gridintrp2d.o r8gridintrp3d.o \
-    gridherm2.o gridherm3.o gridintrp2d.o gridintrp3d.o zonfind.o ezspline_modulo.o
+    gridherm2.o gridherm3.o gridintrp2d.o gridintrp3d.o zonfind.o ezspline_modulo.o FZERO.o 
 
 LIBSTELL_TARGET = mini_libstell.a
 
@@ -43,6 +43,7 @@ clean:
 	rm -f *.o *.mod *.MOD *~ $(LIBSTELL_TARGET)
 
 # Dependencies:
+FZERO.o:
 akherm1.o:
 akherm2.o:
 akherm3.o:
