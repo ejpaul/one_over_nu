@@ -335,11 +335,12 @@ module splines_mod
 	function compute_geometry_spline(isurf,theta,zeta)
 
 		use geometry_mod, only: Boozer_G, Boozer_I, iota
+		use stel_constants
 
 		integer, intent(in) :: isurf
 		real(dp), intent(in) :: theta, zeta
 		real(dp), dimension(geometry_length) :: compute_geometry_spline
-		real(dp) :: zeta_eval, theta_eval, BB, dBBdtheta
+		real(dp) :: zeta_eval, theta_eval, BB, dBBdtheta, sign_Bdotgradzeta
 		integer :: ierr
 
 		zeta_eval = zeta
@@ -368,13 +369,14 @@ module splines_mod
 					compute_geometry_spline(d2Bdotgradzetadtheta2_index),ierr)
 			end if
 		else ! boozer
-			compute_geometry_spline(Bdotgradzeta_index) = (BB**2) &
-				/(Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf))
+			sign_Bdotgradzeta = sign(one,Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf))
+			compute_geometry_spline(Bdotgradzeta_index) = abs((BB**2) &
+				/(Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf)))
 			compute_geometry_spline(dBdotgradzetadtheta_index) = 2.0*BB*dBBdtheta &
-				/(Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf))
+				/(Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf))*sign_Bdotgradzeta
 			if (output_P_tensor) then
 				compute_geometry_spline(d2Bdotgradzetadtheta2_index) = 2.0*(dBBdtheta**2 + BB*d2BBdtheta2) &
-					/(Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf))
+					/(Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf))*sign_Bdotgradzeta
 			end if
 		end if
 
