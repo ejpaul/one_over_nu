@@ -364,9 +364,18 @@ module geometry_mod
 		allocate(angle(ntheta_transform,nzeta_transform))
 		allocate(cosangle(ntheta_transform,nzeta_transform))
 		allocate(sinangle(ntheta_transform,nzeta_transform))
-
 		allocate(theta_vmec_on_theta_pest_grid(ntheta_transform,nzeta_transform))
-
+		allocate(B_on_theta_pest_grid(ntheta_transform,nzeta_transform))
+		allocate(Bsubu_on_theta_pest_grid(ntheta_transform,nzeta_transform))
+		allocate(Bsubv_on_theta_pest_grid(ntheta_transform,nzeta_transform))
+		allocate(sqrt_g_vmec_on_theta_pest_grid(ntheta_transform,nzeta_transform))
+		allocate(d_lambda_d_theta_vmec_on_theta_pest_grid(ntheta_transform,nzeta_transform))
+		allocate(lambda_on_theta_vmec_grid(ntheta_transform,nzeta_transform))
+		allocate(B_dot_grad_zeta_on_theta_pest_grid(ntheta_transform,nzeta_transform))
+		allocate(B_on_theta_pest_grid_reconstructed(ntheta_transform,nzeta_transform))
+		allocate(Bsubu_on_theta_pest_grid_reconstructed(ntheta_transform,nzeta_transform))
+		allocate(Bsubv_on_theta_pest_grid_reconstructed(ntheta_transform,nzeta_transform))
+		allocate(B_dot_grad_zeta_on_theta_pest_grid_reconstructed(ntheta_transform,nzeta_transform))
 		do isurf=1,nsurf
 			! Find closest available half-grid surface to desired value of s
 			s_index = minloc(abs(s_half-s_wish(isurf)),1)
@@ -402,13 +411,6 @@ module geometry_mod
 			end do
 
 			! Evaluate all quantities using uniformly spaced grid in theta_pest
-			allocate(B_on_theta_pest_grid(ntheta_transform,nzeta_transform))
-			allocate(Bsubu_on_theta_pest_grid(ntheta_transform,nzeta_transform))
-			allocate(Bsubv_on_theta_pest_grid(ntheta_transform,nzeta_transform))
-			allocate(sqrt_g_vmec_on_theta_pest_grid(ntheta_transform,nzeta_transform))
-			allocate(d_lambda_d_theta_vmec_on_theta_pest_grid(ntheta_transform,nzeta_transform))
-			allocate(lambda_on_theta_vmec_grid(ntheta_transform,nzeta_transform))
-			allocate(B_dot_grad_zeta_on_theta_pest_grid(ntheta_transform,nzeta_transform))
 			B_on_theta_pest_grid = zero
 			Bsubu_on_theta_pest_grid = zero
 			Bsubv_on_theta_pest_grid = zero
@@ -418,10 +420,6 @@ module geometry_mod
 			B_dot_grad_zeta_on_theta_pest_grid = zero
 
 			! Reconstructed quantities
-			allocate(B_on_theta_pest_grid_reconstructed(ntheta_transform,nzeta_transform))
-			allocate(Bsubu_on_theta_pest_grid_reconstructed(ntheta_transform,nzeta_transform))
-			allocate(Bsubv_on_theta_pest_grid_reconstructed(ntheta_transform,nzeta_transform))
-			allocate(B_dot_grad_zeta_on_theta_pest_grid_reconstructed(ntheta_transform,nzeta_transform))
 			B_on_theta_pest_grid_reconstructed = zero
 			Bsubu_on_theta_pest_grid_reconstructed = zero
 			Bsubv_on_theta_pest_grid_reconstructed = zero

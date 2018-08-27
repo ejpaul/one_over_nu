@@ -155,16 +155,16 @@ module splines_mod
 				call ezspline_setup(spline_d2Bdtheta2(isurf),&
 					d2Bdtheta2_for_spline(isurf,:,:),ierr,.true.)
 				call ezspline_error(ierr)
-			end if
-			if (geometry_option==2) then
-				call ezspline_init(spline_d2Bdotgradzetadtheta2(isurf),ntheta_spline,&
-					nzeta_spline,(/-1,-1/),(/-1,-1/),ierr)
-				call ezspline_error(ierr)
-				spline_d2Bdotgradzetadtheta2(isurf)%x1 = thetas_spline
-				spline_d2Bdotgradzetadtheta2(isurf)%x2 = zetas_spline
-				call ezspline_setup(spline_d2Bdotgradzetadtheta2(isurf),&
-					d2Bdotgradzetadtheta2_for_spline(isurf,:,:),ierr,.true.)
-				call ezspline_error(ierr)
+				if (geometry_option==2) then
+					call ezspline_init(spline_d2Bdotgradzetadtheta2(isurf),ntheta_spline,&
+						nzeta_spline,(/-1,-1/),(/-1,-1/),ierr)
+					call ezspline_error(ierr)
+					spline_d2Bdotgradzetadtheta2(isurf)%x1 = thetas_spline
+					spline_d2Bdotgradzetadtheta2(isurf)%x2 = zetas_spline
+					call ezspline_setup(spline_d2Bdotgradzetadtheta2(isurf),&
+						d2Bdotgradzetadtheta2_for_spline(isurf,:,:),ierr,.true.)
+					call ezspline_error(ierr)
+				end if
 			end if
 		end do
 
