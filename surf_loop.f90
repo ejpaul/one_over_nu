@@ -29,9 +29,7 @@ subroutine surf_loop()
 			end if
 			call flintegrate(isurf,ilambda)
 		end do
-
 		call compute_diagnostics(isurf)
-
 	end do ! isurf
 
 end subroutine surf_loop

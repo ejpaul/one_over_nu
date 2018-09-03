@@ -13,6 +13,8 @@ module diagnostics_mod
 	real(dp), dimension(:), allocatable :: energy_integral
 	! P tensor for adjoint perturbed equilibrium
 	real(dp), dimension(:,:,:), allocatable :: P_tensor_bb, P_tensor_I
+	real(dp), dimension(:,:,:,:,:), allocatable :: P_tensor_bb_before_integral
+	real(dp), dimension(:,:,:,:,:), allocatable :: P_tensor_I_before_integral
 
 	contains
 
@@ -26,7 +28,7 @@ module diagnostics_mod
 	subroutine init_diagnostics()
 
 		use input_mod, only: nsurf, nlambda, nalpha, nwell, output_J, &
-			output_P_tensor
+			output_P_tensor, output_particle_flux, nzeta_spline
 
 		implicit none
 
@@ -50,6 +52,25 @@ module diagnostics_mod
 			dIdalpha = 0
 		end if
 		allocate(nclass(nsurf,nlambda,nalpha))
+
+		if (output_P_tensor .or. output_particle_flux) then
+			allocate(energy_integral(nsurf))
+		end if
+
+		if (output_P_tensor) then
+			allocate(P_tensor_bb(nsurf,nalpha,nzeta_spline))
+			allocate(P_tensor_I(nsurf,nalpha,nzeta_spline))
+			allocate(P_tensor_bb_before_integral(nsurf,nalpha,nzeta_spline,nlambda,nwell))
+			allocate(P_tensor_I_before_integral(nsurf,nalpha,nzeta_spline,nlambda,nwell))
+			P_tensor_bb_before_integral = 0.0
+			P_tensor_I_before_integral = 0.0
+			P_tensor_bb_before_integral = 0.0
+			P_tensor_I_before_integral = 0.0
+		end if
+
+		if (output_particle_flux) then
+			allocate(particleFlux(nsurf))
+		end if
 
 		I_bounce_integral = 0
 		dKdalpha = 0
@@ -106,13 +127,13 @@ module diagnostics_mod
 			sum(one_over_nu_metric_before_integral(isurf,:,:,:))*dalpha*dlambda(isurf)
 
 		if (output_particle_flux .or. output_p_tensor) then
-			call compute_energy_integral()
+			call compute_energy_integral(isurf)
 		end if
 		if (output_particle_flux) then
-			call compute_particle_flux()
+			call compute_particle_flux(isurf)
 		end if
 		if (output_p_tensor) then
-			call compute_p_tensor()
+			call compute_p_tensor(isurf)
 		end if
 
 	end subroutine compute_diagnostics
@@ -126,7 +147,7 @@ module diagnostics_mod
 ! output_particle_flux_option = .true..
 !
 ! ===================================================
-	subroutine compute_particle_flux
+	subroutine compute_particle_flux(isurf)
 
 		use input_mod
 		use splines_mod
@@ -136,24 +157,20 @@ module diagnostics_mod
 
 		implicit none
 
+		integer, intent(in) :: isurf
 		real(dp) :: lnlambda, nuhat, v_t1, vprime, prefactor, H1, H2
-		integer :: isurf
 
-		allocate(particleFlux(nsurf))
+		! Compute vprime using spline grid
+		if (geometry_option==1) then
+			vprime = (Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf)) &
+				*sum(1.0/B_for_spline(isurf,:,:)**2)*dtheta_spline*dzeta_spline
+		else
+			vprime = sum(1.0/Bdotgradzeta_for_spline(isurf,:,:))*dtheta_spline*dzeta_spline
+		end if
 
-		do isurf = 1, nsurf
-			! Compute vprime using spline grid
-			if (geometry_option==1) then
-				vprime = (Boozer_G(isurf) + iota(isurf)*Boozer_I(isurf)) &
-					*sum(1.0/B_for_spline(isurf,:,:)**2)*dtheta_spline*dzeta_spline
-			else
-				vprime = sum(1.0/Bdotgradzeta_for_spline(isurf,:,:))*dtheta_spline*dzeta_spline
-			end if
+		prefactor = -pi*(m_kg**2)/(9*vprime*(e**2)*(q_e(1)**2))
 
-			prefactor = -pi*(m_kg**2)/(9*vprime*(e**2)*(q_e(1)**2))
-
-			particleFlux(isurf) = prefactor*one_over_nu_metric(isurf)*energy_integral(isurf)
-		end do
+		particleFlux(isurf) = prefactor*one_over_nu_metric(isurf)*energy_integral(isurf)
 
 	end subroutine compute_particle_flux
 
@@ -165,7 +182,7 @@ module diagnostics_mod
 ! P tensor.
 !
 ! ===================================================
-	subroutine compute_energy_integral
+	subroutine compute_energy_integral(isurf)
 
 		use input_mod
 		use stel_constants
@@ -173,50 +190,46 @@ module diagnostics_mod
 
 		implicit none
 
+		integer, intent(in) :: isurf
 		real(dp) :: lnlambda, nuhat, v_t1
-		integer :: isurf
 
-		allocate(energy_integral(nsurf))
+		if (collision_species_option == 2 .and. q_e(1)<0) then
+			! Defined in NRL formulary - electron-electron self collisions
+			lnlambda = 23.5 - 0.5*log(n_m3(isurf)*1.e-6) + 1.25*log(T_ev(isurf)) &
+				- sqrt(1.0e-5 + 0.0625*(log(T_ev(isurf))-2)**2)
+		else if (collision_species_option == 1) then
+			! Defined in NRL formulary - electron-ion collisions
+			lnlambda = 24 - 0.5*log(n_m3(isurf)*(1.0e-6)) + log(T_ev(isurf))
+		else if (collision_species_option == 2 .and. q_e(1)>0) then
+			! Defined in NRL formulary - ion-ion self collisions
+			lnlambda = 23 - log(q_e(1)**2/T_ev(isurf)) &
+				- 0.5*log(2.0*n_m3(isurf)*(1.0e-6)*(q_e(1)**2)/T_ev(isurf))
+		else
+			stop "Incorrect option in compute_particle_flux!"
+		end if
 
-		do isurf = 1, nsurf
-			if (collision_species_option == 2 .and. q_e(1)<0) then
-				! Defined in NRL formulary - electron-electron self collisions
-				lnlambda = 23.5 - 0.5*log(n_m3(isurf)*1.e-6) + 1.25*log(T_ev(isurf)) &
-					- sqrt(1.0e-5 + 0.0625*(log(T_ev(isurf))-2)**2)
-			else if (collision_species_option == 1) then
-				! Defined in NRL formulary - electron-ion collisions
-				lnlambda = 24 - 0.5*log(n_m3(isurf)*(1.0e-6)) + log(T_ev(isurf))
-			else if (collision_species_option == 2 .and. q_e(1)>0) then
-				! Defined in NRL formulary - ion-ion self collisions
-				lnlambda = 23 - log(q_e(1)**2/T_ev(isurf)) &
-					- 0.5*log(2.0*n_m3(isurf)*(1.0e-6)*(q_e(1)**2)/T_ev(isurf))
-			else
-				stop "Incorrect option in compute_particle_flux!"
-			end if
+		! Compute thermal speed for primary species
+		v_t1 = sqrt(2*T_ev(isurf)*e/(m_kg))
+		! Compute collision frequency
+		if (collision_species_option==1) then
+			! electron-ion collisions
+			nuhat = n_m3(isurf)*q_e(2)*(-q_e(1)**3)*(e**(4))*lnlambda/ &
+				(4*pi*(epsilon0**2)*(m_kg**2)*(v_t1**3))
+		else
+			! self collisions
+			nuhat = n_m3(isurf)*(q_e(1)**4)*(e**(4))*lnlambda/ &
+				(4*pi*(epsilon0**2)*(m_kg**2)*(v_t1**3))
+		end if
 
-			! Compute thermal speed for primary species
-			v_t1 = sqrt(2*T_ev(isurf)*e/(m_kg))
-			! Compute collision frequency
-			if (collision_species_option==1) then
-				! electron-ion collisions
-				nuhat = n_m3(isurf)*q_e(2)*(-q_e(1)**3)*(e**(4))*lnlambda/ &
-					(4*pi*(epsilon0**2)*(m_kg**2)*(v_t1**3))
-			else
-				! self collisions
-				nuhat = n_m3(isurf)*(q_e(1)**4)*(e**(4))*lnlambda/ &
-					(4*pi*(epsilon0**2)*(m_kg**2)*(v_t1**3))
-			end if
-
-			if (collision_species_option == 1) then
-				! electron-ion collisions
-				energy_integral(isurf) = 12*n_m3(isurf)*(v_t1**4)/(nuhat*(pi**(1.5))) &
-					*(dlnndpsi(isurf) + 3.5*dlnTdpsi(isurf))
-			else
-				! self collisions
-				energy_integral(isurf) = 13.7081*n_m3(isurf)*(v_t1**4)/(nuhat*(pi**(1.5))) &
-					*(dlnndpsi(isurf) + 3.3668*dlnTdpsi(isurf))
-			end if
-		end do
+		if (collision_species_option == 1) then
+			! electron-ion collisions
+			energy_integral(isurf) = 12*n_m3(isurf)*(v_t1**4)/(nuhat*(pi**(1.5))) &
+				*(dlnndpsi(isurf) + 3.5*dlnTdpsi(isurf))
+		else
+			! self collisions
+			energy_integral(isurf) = 13.7081*n_m3(isurf)*(v_t1**4)/(nuhat*(pi**(1.5))) &
+				*(dlnndpsi(isurf) + 3.3668*dlnTdpsi(isurf))
+		end if
 
 	end subroutine compute_energy_integral
 
@@ -228,7 +241,7 @@ module diagnostics_mod
 ! is not included. 
 !
 ! ===================================================
-	subroutine compute_P_tensor
+	subroutine compute_P_tensor(isurf)
 
 		use input_mod, only: nsurf, nlambda, nalpha, nwell
 		use grids_mod, only: lambdas, alphas, dlambda
@@ -238,72 +251,60 @@ module diagnostics_mod
 
 		implicit none
 
-		integer :: iclass, ialpha, ilambda, isurf, izeta
+		integer, intent(in) :: isurf
+		integer :: iclass, ialpha, ilambda, izeta
 		real(dp) :: lambda, lambda_scaled, theta, BB, radicand, inv_radicand
-		real(dp), dimension(:,:,:,:,:), allocatable :: P_tensor_bb_before_integral
-		real(dp), dimension(:,:,:,:,:), allocatable :: P_tensor_I_before_integral
 
-		allocate(P_tensor_bb(nsurf,nalpha,nzeta_spline))
-		allocate(P_tensor_I(nsurf,nalpha,nzeta_spline))
-		allocate(P_tensor_bb_before_integral(nsurf,nalpha,nzeta_spline,nlambda,nwell))
-		allocate(P_tensor_I_before_integral(nsurf,nalpha,nzeta_spline,nlambda,nwell))
-
-		P_tensor_bb_before_integral = 0.0
-		P_tensor_I_before_integral = 0.0
-		do isurf=1,nsurf
-			do ilambda=1,nlambda
-				lambda_scaled = lambdas(ilambda)
-				lambda = 1.0/max_B(isurf) + &
-					(1.0/min_B(isurf) - 1.0/max_B(isurf)) * lambda_scaled
-				do ialpha=1,nalpha
-					do izeta = 1,nzeta_spline
-						theta = alphas(ialpha) + iota(isurf)*zetas_spline(izeta)
-						BB = compute_B(isurf, theta, zetas_spline(izeta))
-						radicand = max(1-lambda*BB,0.0)
-						inv_radicand = max(1/(1-lambda*BB),0.0)
-						do iclass=1,nclass(isurf,ilambda,ialpha)
-									P_tensor_bb_before_integral(isurf,ialpha,izeta,ilambda,iclass) = &
-										-2*((I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-2)) &
-										*(dKdalpha(isurf,ilambda,ialpha,iclass)**2)*BB*sqrt(inv_radicand)/2.0 &
-										+ (-2*dIdalpha(isurf,ilambda,ialpha,iclass) &
-										*dKdalpha(isurf,ilambda,ialpha,iclass) &
-										*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-2)) &
-										+ 2*d2Kdalpha2(isurf,ilambda,ialpha,iclass) &
-											*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-1))) &
-										*(3*BB*sqrt(radicand)/2))
-									P_tensor_I_before_integral(isurf,ialpha,izeta,ilambda,iclass) = &
-										2*((I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-2)) &
-										*(dKdalpha(isurf,ilambda,ialpha,iclass)**2)*(BB*sqrt(inv_radicand)/2.0 &
-										+ sqrt(radicand)/lambda) + (-2*dIdalpha(isurf,ilambda,ialpha,iclass) &
-										*dKdalpha(isurf,ilambda,ialpha,iclass) &
-										*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-2)) &
-										+ 2*d2Kdalpha2(isurf,ilambda,ialpha,iclass) &
-										*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-1))) &
-										*(3*BB*sqrt(radicand)/2.0 + sqrt(radicand)**3/lambda))
-						end do ! iclass
-					end do ! izeta
-				end do ! ialpha
-			end do ! ilambda
-		end do ! isurf
-
-		do isurf=1,nsurf
+		do ilambda=1,nlambda
+			lambda_scaled = lambdas(ilambda)
+			lambda = 1.0/max_B(isurf) + &
+				(1.0/min_B(isurf) - 1.0/max_B(isurf)) * lambda_scaled
 			do ialpha=1,nalpha
-				do izeta=1,nzeta_spline
-					! Trapezoid rule for lambda integration
-					P_tensor_bb_before_integral(isurf,ialpha,izeta,nlambda,:) = &
-						0.5*P_tensor_bb_before_integral(isurf,ialpha,izeta,nlambda,:)
-					P_tensor_bb_before_integral(isurf,ialpha,izeta,1,:) = &
-						0.5*P_tensor_bb_before_integral(isurf,ialpha,izeta,1,:)
-					P_tensor_I_before_integral(isurf,ialpha,izeta,nlambda,:) = &
-						0.5*P_tensor_I_before_integral(isurf,ialpha,izeta,nlambda,:)
-					P_tensor_I_before_integral(isurf,ialpha,izeta,1,:) = &
-						0.5*P_tensor_I_before_integral(isurf,ialpha,izeta,1,:)
-					! Perform integration over lambda and sum over particle class
-					P_tensor_bb(isurf,ialpha,izeta) = sum(P_tensor_bb_before_integral(isurf,ialpha,izeta,:,:))
-					P_tensor_I(isurf,ialpha,izeta) = sum(P_tensor_I_before_integral(isurf,ialpha,izeta,:,:))
-					P_tensor_bb(isurf,ialpha,izeta) = P_tensor_bb(isurf,ialpha,izeta)*dlambda(isurf)
-					P_tensor_I(isurf,ialpha,izeta) = P_tensor_I(isurf,ialpha,izeta)*dlambda(isurf)
-				end do
+				do izeta = 1,nzeta_spline
+					theta = alphas(ialpha) + iota(isurf)*zetas_spline(izeta)
+					BB = compute_B(isurf, theta, zetas_spline(izeta))
+					radicand = max(1-lambda*BB,0.0)
+					inv_radicand = max(1/(1-lambda*BB),0.0)
+					do iclass=1,nclass(isurf,ilambda,ialpha)
+								P_tensor_bb_before_integral(isurf,ialpha,izeta,ilambda,iclass) = &
+									-2*((I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-2)) &
+									*(dKdalpha(isurf,ilambda,ialpha,iclass)**2)*BB*sqrt(inv_radicand)/2.0 &
+									+ (-2*dIdalpha(isurf,ilambda,ialpha,iclass) &
+									*dKdalpha(isurf,ilambda,ialpha,iclass) &
+									*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-2)) &
+									+ 2*d2Kdalpha2(isurf,ilambda,ialpha,iclass) &
+										*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-1))) &
+									*(3*BB*sqrt(radicand)/2))
+								P_tensor_I_before_integral(isurf,ialpha,izeta,ilambda,iclass) = &
+									2*((I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-2)) &
+									*(dKdalpha(isurf,ilambda,ialpha,iclass)**2)*(BB*sqrt(inv_radicand)/2.0 &
+									+ sqrt(radicand)/lambda) + (-2*dIdalpha(isurf,ilambda,ialpha,iclass) &
+									*dKdalpha(isurf,ilambda,ialpha,iclass) &
+									*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-2)) &
+									+ 2*d2Kdalpha2(isurf,ilambda,ialpha,iclass) &
+									*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-1))) &
+									*(3*BB*sqrt(radicand)/2.0 + sqrt(radicand)**3/lambda))
+					end do ! iclass
+				end do ! izeta
+			end do ! ialpha
+		end do ! ilambda
+
+		do ialpha=1,nalpha
+			do izeta=1,nzeta_spline
+				! Trapezoid rule for lambda integration
+				P_tensor_bb_before_integral(isurf,ialpha,izeta,nlambda,:) = &
+					0.5*P_tensor_bb_before_integral(isurf,ialpha,izeta,nlambda,:)
+				P_tensor_bb_before_integral(isurf,ialpha,izeta,1,:) = &
+					0.5*P_tensor_bb_before_integral(isurf,ialpha,izeta,1,:)
+				P_tensor_I_before_integral(isurf,ialpha,izeta,nlambda,:) = &
+					0.5*P_tensor_I_before_integral(isurf,ialpha,izeta,nlambda,:)
+				P_tensor_I_before_integral(isurf,ialpha,izeta,1,:) = &
+					0.5*P_tensor_I_before_integral(isurf,ialpha,izeta,1,:)
+				! Perform integration over lambda and sum over particle class
+				P_tensor_bb(isurf,ialpha,izeta) = sum(P_tensor_bb_before_integral(isurf,ialpha,izeta,:,:))
+				P_tensor_I(isurf,ialpha,izeta) = sum(P_tensor_I_before_integral(isurf,ialpha,izeta,:,:))
+				P_tensor_bb(isurf,ialpha,izeta) = P_tensor_bb(isurf,ialpha,izeta)*dlambda(isurf)
+				P_tensor_I(isurf,ialpha,izeta) = P_tensor_I(isurf,ialpha,izeta)*dlambda(isurf)
 			end do
 		end do
 
