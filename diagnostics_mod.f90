@@ -55,7 +55,6 @@ module diagnostics_mod
 		dKdalpha = 0
 		nclass = 0
 
-
 	end subroutine init_diagnostics
 
  ! ===================================================
@@ -256,8 +255,8 @@ module diagnostics_mod
 				lambda_scaled = lambdas(ilambda)
 				lambda = 1.0/max_B(isurf) + &
 					(1.0/min_B(isurf) - 1.0/max_B(isurf)) * lambda_scaled
-				do izeta = 1,nzeta_spline
-					do ialpha=1,nalpha
+				do ialpha=1,nalpha
+					do izeta = 1,nzeta_spline
 						theta = alphas(ialpha) + iota(isurf)*zetas_spline(izeta)
 						BB = compute_B(isurf, theta, zetas_spline(izeta))
 						radicand = max(1-lambda*BB,0.0)
@@ -281,8 +280,15 @@ module diagnostics_mod
 										+ 2*d2Kdalpha2(isurf,ilambda,ialpha,iclass) &
 										*(I_bounce_integral(isurf,ilambda,ialpha,iclass)**(-1))) &
 										*(3*BB*sqrt(radicand)/2.0 + sqrt(radicand)**3/lambda))
-						end do ! ialpha
+						end do ! iclass
 					end do ! izeta
+				end do ! ialpha
+			end do ! ilambda
+		end do ! isurf
+
+		do isurf=1,nsurf
+			do ialpha=1,nalpha
+				do izeta=1,nzeta_spline
 					! Trapezoid rule for lambda integration
 					P_tensor_bb_before_integral(isurf,ialpha,izeta,nlambda,:) = &
 						0.5*P_tensor_bb_before_integral(isurf,ialpha,izeta,nlambda,:)
@@ -297,9 +303,9 @@ module diagnostics_mod
 					P_tensor_I(isurf,ialpha,izeta) = sum(P_tensor_I_before_integral(isurf,ialpha,izeta,:,:))
 					P_tensor_bb(isurf,ialpha,izeta) = P_tensor_bb(isurf,ialpha,izeta)*dlambda(isurf)
 					P_tensor_I(isurf,ialpha,izeta) = P_tensor_I(isurf,ialpha,izeta)*dlambda(isurf)
-				end do ! izeta
-			end do ! ilambda
-		end do ! isurf
+				end do
+			end do
+		end do
 
 	end subroutine compute_P_tensor
 
