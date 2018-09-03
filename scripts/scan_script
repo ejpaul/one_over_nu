@@ -1,0 +1,315 @@
+#!/usr/bin/env python
+
+# Adapted from sfincsScan to perform parameter scans of one_over_nu
+
+import os, inspect, math, subprocess
+from sys import argv
+
+print "This is "+ inspect.getfile(inspect.currentframe())
+
+filename = argv[1]
+inputFilename = filename
+jobFilename = argv[2]
+commentCode = "!ss"
+print "filename: "+filename
+print "jobFilename: "+jobFilename
+
+try:
+    HOSTNAME= os.environ["HOSTNAME"]
+except:
+    print "Error! Unable to read the HOSTNAME environment variable. Make sure you have set it."
+    raise
+print "I detect HOSTNAME = "+HOSTNAME
+
+waitBeforeSubmitting = True
+
+if not os.path.isfile(filename):
+    print "Error! The file "+filename+" must be present in the directory from which you call scan_script."
+    exit(1)
+
+# For each system, 
+if HOSTNAME=="edison08":
+    submitCommand = "sbatch "+jobFilename
+    def nameJobFile(original,name):
+        # Modify the job file to change the name that appears in the queue.
+        # Insert the new line after the original first line, since the first line is a shebang.
+        original.insert(1,"#SBATCH -J "+name+"\n")
+        return original
+
+elif HOSTNAME=="cori":
+    submitCommand = "sbatch "+jobFilename
+    def nameJobFile(original,name):
+        # Modify the job file to change the name that appears in the queue.
+        # Insert the new line after the original first line, since the first line is a shebang.
+        original.insert(1,"#SBATCH -J "+name+"\n")
+        return original
+
+elif HOSTNAME=="laptop":
+    submitCommand = "bash "+jobFilename
+    def nameJobFile(original,name):
+        # No changes needed to the job file.
+        return original
+
+else:
+    print "Error! HOSTNAME="+HOSTNAME+" is not yet recognized by scan_script"
+    print "You will need to edit scan_script to specify a few things for this system."
+    exit(1)
+
+if not os.path.isfile(jobFilename):
+    print "Error! A "+jobFilename+" file must be present in the directory from which you call scan_script (even for systems with no queue)."
+    exit(1)
+
+# Load the input file:
+with open(filename, 'r') as f:
+    inputFile = f.readlines()
+
+# Next come some functions used in convergence scans which might be useful for other types of scans:
+def uniq(seq): 
+   checked = []
+   for e in seq:
+       if e not in checked:
+           checked.append(e)
+   return checked
+
+def logspace(min,max,nn):
+    if nn < 1:
+        return []
+    elif nn==1:
+        return [min]
+
+    if min <= 0:
+        print "Error in logspace! min must be positive."
+        exit(1)
+    if max <= 0:
+        print "Error in logspace! max must be positive."
+        exit(1)
+    return [math.exp(x/(nn-1.0)*(math.log(max)-math.log(min))+math.log(min)) for x in range(nn)]
+
+def linspace(min,max,nn):
+    if nn < 1:
+        return []
+    elif nn==1:
+        return [min]
+    return [x/(nn-1.0)*(max-min)+min for x in range(nn)]
+
+def logspace_int(min,max,nn):
+    return uniq(map(int,map(round,logspace(min,max,nn))))
+
+def logspace_odd(min,max,nn):
+    temp = map(int,logspace(min,max,nn))
+    temp2 = []
+    for x in temp:
+        if (x % 2 == 0):
+            temp2.append(x+1)
+        else:
+            temp2.append(x)
+    return uniq(temp2)
+
+def namelistLineContains(line,varName):
+    line2 = line.strip().lower()
+    varName = varName.lower()
+    # We need enough characters for the varName, =, and value: 
+    if len(line2)<len(varName)+2:
+        return False
+
+    if line2[0]=="!":
+        return False
+
+    nextChar = line2[len(varName)]
+    if line2[:len(varName)]==varName and (nextChar==" " or nextChar=="="):
+        return True
+    else:
+        return False
+
+def namelistLineContainsSS(line,varName):
+    # Same as namelistLineContains, but looking for !ss directives.
+    line2 = line.strip().lower()
+    varName = varName.lower()
+    if len(line2)<len(commentCode):
+        return False
+
+    if line2[:len(commentCode)] != commentCode:
+        return False
+
+    # If we got this far, the line must begin with !ss, so strip this part out.
+    line2 = line2[len(commentCode):].strip()
+
+    # We need enough characters for the varName, =, and value: 
+    if len(line2)<len(varName)+2:
+        return False
+
+    if line2[0]=="!":
+        return False
+
+    nextChar = line2[len(varName)]
+    if line2[:len(varName)]==varName and (nextChar==" " or nextChar=="="):
+        return True
+    else:
+        return False
+
+# Load some other required subroutines:
+execfile(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))+"/sfincsScan_common")
+
+print "This is "+ inspect.getfile(inspect.currentframe())
+print "Beginning a scan of one specified parameter."
+
+scanVariable = readScanVariable("scanVariable","string").lower()
+
+# Validate:
+warningText = "WARNING: While "+scanVariable+" is an input namelist parameter with a numerical value, it is probably a mistake to scan it."
+
+if scanVariable == "nlambda":
+	mustBeInteger = True
+elif scanVariable == "nalpha":
+	mustBeInteger = True
+elif scanVariable == "nintegral":
+	mustBeInteger = True
+elif scanVariable == "max_search_in_zeta":
+	mustBeInteger = False
+elif scanVariable == "ntheta":
+	mustBeInteger = True
+elif scanVariable == "nzeta":
+	mustBeInteger = True
+elif scanVariable == "niter_newton":
+	mustBeInteger = True
+elif scanVariable == "tol_newton":
+	mustBeInteger = False
+elif scanVariable == "Delta_zeta":
+	mustBeInteger = False
+elif scanVariable == "Niter_root":
+	mustBeInteger = True
+elif scanVariable == "root_search_tolerance":
+	mustBeInteger = False
+else:
+    print "Error! The selected scanVariable is either not a valid input namelist parameter or it is one that does not take a numerical value."
+    exit(1)
+
+print "The variable that will be scanned is "+scanVariable
+
+if mustBeInteger:
+    print "Only integer values of this variable are permitted."
+    scanVarTypeStr = "int"
+else:
+    print "Non-integer values of this variable are permitted."
+    scanVarTypeStr = "float"
+
+scanVariableMin = readScanVariable("scanVariableMin",scanVarTypeStr)
+scanVariableMax = readScanVariable("scanVariableMax",scanVarTypeStr)
+
+try:
+    dummy = readVariable(scanVariable,scanVarTypeStr)
+except:
+    print "The variable you wish to scan must be explicitly assigned some value in the appropriate namelist,"
+    print "even though the value will be ignored in the scan."
+    exit(1)
+
+scanVariableN = readScanVariable("scanVariableN","int")
+scanVariableScale = readScanVariable("scanVariableScale","string")
+if scanVariableScale == "log" or scanVariableScale == "logarithmic":
+    if scanVariableMin * scanVariableMax < 0:
+        print "ERROR: scanVariableMin and scanVariableMax must have the same sign for a logarithmic scan."
+        exit(1)
+
+    scanVariableValues = logspace(abs(scanVariableMin), abs(scanVariableMax), scanVariableN)
+    if scanVariableMin<0:
+        scanVariableValues[:] = [-x for x in scanVariableValues]
+
+elif scanVariableScale == "lin" or scanVariableScale == "linear":
+    scanVariableValues = linspace(scanVariableMin, scanVariableMax, scanVariableN)
+else:
+    print "ERROR: You must set scanVariableScale to either linear or log."
+    exit(1)
+
+if mustBeInteger:
+    scanVariableValues[:] = [int(x) for x in scanVariableValues]
+    # Remove duplicates:
+    scanVariableValues = list(set(scanVariableValues))
+
+print "Here are the values of "+scanVariable+" we will use for this scan:"
+print scanVariableValues
+
+directories = [scanVariable+"_"+"{:.4g}".format(scanVariableValue) for scanVariableValue in scanVariableValues]
+
+scanVariableValues_copy = list(scanVariableValues)
+directories_copy = list(directories)
+
+# See if any runs with the same description already exist.
+# This happens if you re-run scan_script more than once in the same directory.
+for i in range(len(scanVariableValues_copy)):
+    directory = directories_copy[i]
+    if os.path.exists(directory):
+        print "Warning: directory "+directory+" already exists, so skipping this run."
+        scanVariableValues.remove(scanVariableValues_copy[i])
+        directories.remove(directory)
+
+print
+print "Here are the directories that will be created:"
+print directories
+
+while True:
+    proceed=raw_input("Should I go ahead and launch these "+str(len(scanVariableValues))+" jobs? [y/n] ")
+    if proceed=="y" or proceed=="n":
+        break
+    print "You must enter either y or n."
+
+if proceed=="n":
+    exit(0)
+print "launching jobs..."
+
+# Read in the job file:
+with open(jobFilename, 'r') as f:
+    jobFile = f.readlines()
+
+for runNum in range(len(scanVariableValues)):
+    directory = directories[runNum]
+    print "Beginning to handle job "+str(runNum+1)+" of "+str(len(scanVariableValues))+": "+directory
+
+    # To be extra safe, check again to see if the directory exists.
+    if os.path.exists(directory):
+        print "Warning: directory "+directory+" already exists."
+        i = -1
+        while True:
+            i += 1
+            directory2 = directory+"_"+str(i)
+            if not os.path.exists(directory2):
+                break
+        directory = directory2
+    os.makedirs(directory)
+    os.chdir(directory)
+
+    # Copy the job file:
+    thisJobFile = list(jobFile)
+    # This next function is defined separately for each system
+    nameJobFile(thisJobFile,directory)
+    f = open(jobFilename,"w")
+    f.writelines(thisJobFile)
+    f.close()
+
+    # Now copy the input.namelist file:
+    f = open(filename,"w")
+    for line in inputFile:
+        # This next line works because previously we have ensured the scan variable explicitly appears
+        # in a namelist.  Otherwise we would have had to possibly add the variable to the appropriate namelist.
+        if namelistLineContains(line,scanVariable):
+            line = "  "+scanVariable+" = "+str(scanVariableValues[runNum])+" ! Set by scan_script.\n"
+        f.write(line)
+    f.close()
+
+    # Submit the job:
+    try:
+        # We need to include .split(" ") to separate the command-line arguments into an array of strings.
+        # I'm not sure why python requires this.
+        submissionResult = subprocess.call(submitCommand.split(" "))
+        #submissionResult=0
+    except:
+        print "ERROR! Unable to submit run "+directory+" for some reason."
+        raise
+    else:
+        if submissionResult==0:
+            print "No errors submitting job "+directory
+        else:
+            print "Nonzero exit code returned when trying to submit job "+directory
+
+    os.chdir("..")
+
+print "Good bye!"

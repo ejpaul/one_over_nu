@@ -1,0 +1,172 @@
+#!/usr/bin/env python
+
+# This python script plots the output of a one_over_nu scan
+# in which any 1 numeric input parameter is varied.
+
+#import matplotlib.pyplot as plt
+import matplotlib
+from scipy.io import netcdf
+import numpy
+import inspect, math, os
+import pickle
+import sys
+import matplotlib.pyplot as plt
+
+print "This is "+ inspect.getfile(inspect.currentframe())
+
+matplotlib.rcParams.update({'font.size': 8})
+
+numRuns = 0
+scanVariableValues = []
+outputs = []
+
+## Load some other required subroutines:
+execfile(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))+"/sfincsScan_common")
+
+# Determine which variable was scanned by looking at input.namelist in the main directory:
+inputFilename = sys.argv[1]
+outputFilename = "one_over_nu_out."
+[left,right] = inputFilename.split('.')
+outputFilename = outputFilename+right+'.nc'
+
+with open(inputFilename, 'r') as f:
+    inputFile = f.readlines()
+scanVariable = readScanVariable("scanVariable","string")
+
+# Was the scan linear or logarithmic?
+scanVariableScale = readScanVariable("scanVariableScale","string")
+if scanVariableScale == "log" or scanVariableScale == "logarithmic":
+   scanScale = "log"
+elif scanVariableScale == "lin" or scanVariableScale == "linear":
+   scanScale = "linear"
+else:
+   print "ERROR: You must set scanVariableScale to either linear or log."
+   exit(1)
+
+def uniq(seq):
+   checked = []
+   for e in seq:
+       if e not in checked:
+           checked.append(e)
+   return checked
+
+# Get a list of the subdirectories:                                                                        
+directories = filter(os.path.isdir, os.listdir("."))
+
+atLeastOneDirectorySucceeded = False
+
+for directory in directories:
+    filename = directory+"/"+outputFilename
+    if not os.path.isfile(filename):
+        print "Directory "+directory+" does not have a "+outputFilename+" file (yet)."
+        continue
+		
+    try:
+        f = netcdf.netcdf_file(filename,'r')
+    except IOError:
+        print "Unable to open "+filename+" even though this file exists."
+        continue
+
+    try:
+        # Try reading a field that should definitely be present in the output file for any run that completed.
+        dummy = f.variables["one_over_nu_metric"]
+    except:
+        print "Unable to read "+filename+" even though this file exists."
+        continue
+
+    print "Processing directory "+directory
+
+    # Read the variable that was scanned from input.namelist rather than from the hdf5 file.
+    # This is done in case the variable is not saved in the hdf5 file, and also so we do not have
+    # to worry about lower/upper case.
+    with open(directory+"/"+inputFilename, 'r') as localInputFile:
+       inputFile = localInputFile.readlines()
+    scanVariableValues.append(readVariable(scanVariable,"float"))
+
+    nsurf = f.dimensions["nsurf"]
+    s_surf = f.variables["s_surf"]
+    one_over_nu_metric = f.variables["one_over_nu_metric"]
+    results = []
+    for isurf in range(0,nsurf):
+        results.append(one_over_nu_metric[isurf])
+
+    atLeastOneDirectorySucceeded = True
+    outputs.append(results)
+    numRuns += 1
+
+    print "Successfully read run in directory "+directory
+
+if not atLeastOneDirectorySucceeded:
+   print "Error! There do not seem to be any completed sfincs jobs in subdirectories of this directory."
+   exit(1)
+
+# Sort:
+scanVariableValues_sorted = sorted(scanVariableValues)
+outputs_sorted = []
+for scanVariableValue in scanVariableValues_sorted:
+   outputs_sorted.append(outputs[scanVariableValues.index(scanVariableValue)])
+ 
+outputs_array = numpy.array(outputs_sorted)
+
+numQuantities = nsurf
+yAxisLabels=[]
+for isurf in range(0,nsurf):
+	label_string = "one_over_nu_metric (s_surf = "+"%.2f" % (s_surf[isurf]) + ")"
+	yAxisLabels.append(label_string)
+
+# ***************************************************
+# Now make the plot
+# ***************************************************
+
+fig = plt.figure()
+fig.patch.set_facecolor('white')
+
+numCols = math.ceil(math.sqrt(numQuantities*1.0))
+numRows = math.ceil(numQuantities*1.0/numCols)
+
+xdata = []
+ydata = []
+xlabels = []
+ylabels = []
+xscales = []
+yscales = []
+ymins = []
+ymaxs = []
+linespec = '.-'
+
+for iQuantity in range(numQuantities):
+   plt.subplot(numRows,numCols,iQuantity+1)
+   xdata.append(scanVariableValues_sorted)
+   ydata.append(outputs_array[:,iQuantity])
+   yscales.append('linear')
+   
+   xlabels.append(scanVariable)
+   ylabels.append(yAxisLabels[iQuantity])
+   if scanScale=="log":
+      xscales.append('log')
+   else:
+      xscales.append('linear') 
+
+   plt.plot(xdata[-1],ydata[-1],linespec)
+   plt.xscale(xscales[-1])
+   plt.yscale(yscales[-1])
+   plt.xlabel(xlabels[-1])
+   plt.ylabel(ylabels[-1])
+   ymin,ymax = plt.ylim()
+   ymins.append(ymin)
+   ymaxs.append(ymax)
+
+outputFile = open('sfincsScan.dat','wb')
+scanType=3
+data = {'scanType':scanType, 'numQuantities':numQuantities, 'numRows':numRows,'numCols':numCols,
+        'xdata':xdata, 'ydata':ydata, 'xlabels':xlabels, 'ylabels':ylabels,
+        'xscales':xscales, 'yscales':yscales, 'ymins':ymins, 'ymaxs':ymaxs,
+        'linespec':linespec}
+pickle.dump(data,outputFile)
+outputFile.close()
+
+titleString = "Plot generated by "+ inspect.getfile(inspect.currentframe()) + "\nRun in "+os.getcwd()
+ax = fig.add_axes([0,0,1,1], frameon=False)
+ax.text(0.5,0.99,titleString,horizontalalignment='center',verticalalignment='top')
+
+plt.show()
