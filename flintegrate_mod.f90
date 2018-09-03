@@ -370,7 +370,7 @@ module flintegrate_mod
 				+ 1.5*lambda*lambda*(dBBdtheta**2)*sqrt(inv_radicand)/BBdotgradzeta &
 				+ 3.0*sqrt(radicand)*lambda*dBBdtheta*dBBdotgradzetadtheta/(BBdotgradzeta**2) &
 				- 2.0*(sqrt(radicand)**3)*d2BBdotgradzetadtheta2/(BBdotgradzeta**2) &
-				+ 3.0*sqrt(radicand)*lambda*dBBdtheta*dBBdotgradzetadtheta/BBdotgradzeta &
+				+ 3.0*sqrt(radicand)*lambda*dBBdtheta*dBBdotgradzetadtheta/(BBdotgradzeta**2) &
 				+ 4.0*(sqrt(radicand)**3)*(dBBdotgradzetadtheta**2)/(BBdotgradzeta**3)
 			bounce_integrand(dIdalpha_index) = -3.0*lambda*dBBdtheta*sqrt(inv_radicand)/BBdotgradzeta &
 				- 2.0*sqrt(radicand)*dBBdotgradzetadtheta/(BBdotgradzeta**2)
